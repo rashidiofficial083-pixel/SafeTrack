@@ -11,6 +11,7 @@ import {
   onSnapshot,
   writeBatch,
   arrayUnion,
+  arrayRemove,
   serverTimestamp,
   type Unsubscribe,
 } from 'firebase/firestore';
@@ -179,6 +180,23 @@ export async function denyPairingRequest(
   await updateDoc(doc(db, 'pairingRequests', requestId), {
     status: 'denied',
   });
+}
+
+export async function stopTracking(
+  currentUid: string,
+  targetUid: string
+): Promise<void> {
+  const batch = writeBatch(db);
+
+  batch.update(doc(db, 'users', currentUid), {
+    trackingUids: arrayRemove(targetUid),
+  });
+
+  batch.update(doc(db, 'users', targetUid), {
+    trackedByUids: arrayRemove(currentUid),
+  });
+
+  await batch.commit();
 }
 
 export async function fetchUserProfiles(uids: string[]): Promise<UserProfile[]> {
