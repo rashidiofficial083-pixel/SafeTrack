@@ -3,12 +3,12 @@
 // Get this from Firebase Console > Project Settings
 // ============================================================
 const firebaseConfig = {
-  apiKey: 'YOUR_API_KEY',
-  authDomain: 'YOUR_PROJECT.firebaseapp.com',
-  projectId: 'YOUR_PROJECT_ID',
-  storageBucket: 'YOUR_PROJECT.appspot.com',
-  messagingSenderId: 'YOUR_SENDER_ID',
-  appId: 'YOUR_APP_ID',
+apiKey: 'AIzaSyBnFWoLAfZPz2D0AxpkGFKJXAmphJ__lz4',
+authDomain: 'safe-track-4d2e1.firebaseapp.com',
+projectId: 'safe-track-4d2e1',
+storageBucket: 'safe-track-4d2e1.firebasestorage.app',
+messagingSenderId: '406687971030',
+appId: '1:406687971030:web:b59c6ecb24319595d9fb77',
 };
 
 import { initializeApp } from 'firebase/app';
