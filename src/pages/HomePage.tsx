@@ -18,7 +18,9 @@ import { BottomNav } from '@/components/BottomNav';
 import { IncomingRequests } from '@/components/IncomingRequests';
 import { TrackedByList } from '@/components/TrackedByList';
 import { TrackSomeoneSheet } from '@/components/TrackSomeoneSheet';
+import { LocationStatusIndicator } from '@/components/LocationStatusIndicator';
 import { subscribeToUserProfile } from '@/lib/firestore';
+import { useLocationSharing } from '@/hooks/useLocationSharing';
 import { getInitials } from '@/lib/utils';
 import type { UserProfile } from '@/types';
 
@@ -104,6 +106,7 @@ export function HomePage() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const { status: locationStatus, retry: retryLocation } = useLocationSharing(user?.uid ?? null);
 
   useEffect(() => {
     if (!user) return;
@@ -167,6 +170,9 @@ export function HomePage() {
             value={`${trackedByCount} ${trackedByCount === 1 ? 'account' : 'accounts'}`}
           />
         </div>
+
+        {/* Location sharing status */}
+        <LocationStatusIndicator status={locationStatus} onRetry={retryLocation} />
 
         {/* Incoming pairing requests */}
         <IncomingRequests />

@@ -5,6 +5,8 @@ import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { LoginPage } from '@/pages/LoginPage';
 import { HomePage } from '@/pages/HomePage';
+import { TrackPage } from '@/pages/TrackPage';
+import { LiveMapPage } from '@/pages/LiveMapPage';
 
 function AppRoutes() {
   const { loading } = useAuth();
@@ -19,6 +21,22 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <HomePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/track"
+        element={
+          <ProtectedRoute>
+            <TrackPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/track/:uid"
+        element={
+          <ProtectedRoute>
+            <LiveMapPage />
           </ProtectedRoute>
         }
       />

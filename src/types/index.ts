@@ -16,6 +16,15 @@ export function toAppUser(user: User): AppUser {
   };
 }
 
+export interface UserLocation {
+  lat: number;
+  lng: number;
+  accuracy: number;
+  heading: number | null;
+  speed: number | null;
+  updatedAt: number;
+}
+
 export interface UserProfile {
   uid: string;
   displayName: string;
@@ -24,6 +33,7 @@ export interface UserProfile {
   secretCode: string;
   trackedByUids: string[];
   trackingUids: string[];
+  location?: UserLocation;
   createdAt: number;
 }
 

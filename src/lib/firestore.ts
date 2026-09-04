@@ -15,7 +15,7 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import type { AppUser, UserProfile, PairingRequest } from '@/types';
+import type { AppUser, UserProfile, PairingRequest, UserLocation } from '@/types';
 
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
@@ -191,4 +191,75 @@ export async function fetchUserProfiles(uids: string[]): Promise<UserProfile[]> 
     }
   }
   return profiles;
+}
+
+export async function updateLocation(
+  uid: string,
+  location: UserLocation
+): Promise<void> {
+  await updateDoc(doc(db, 'users', uid), {
+    location: {
+      lat: location.lat,
+      lng: location.lng,
+      accuracy: location.accuracy,
+      heading: location.heading,
+      speed: location.speed,
+      updatedAt: serverTimestamp(),
+    },
+  });
+}
+
+export function subscribeToTrackedUsers(
+  uids: string[],
+  callback: (profiles: UserProfile[]) => void
+): Unsubscribe {
+  if (uids.length === 0) {
+    callback([]);
+    return () => {};
+  }
+
+  const unsubscribers: Unsubscribe[] = [];
+  const profilesMap = new Map<string, UserProfile>();
+
+  const checkAllReady = () => {
+    if (profilesMap.size === uids.length) {
+      callback(
+        uids
+          .map((uid) => profilesMap.get(uid))
+          .filter((p): p is UserProfile => p !== undefined)
+      );
+    }
+  };
+
+  uids.forEach((uid) => {
+    const unsub = onSnapshot(doc(db, 'users', uid), (snap) => {
+      if (snap.exists()) {
+        profilesMap.set(uid, { uid, ...snap.data() } as UserProfile);
+      } else {
+        profilesMap.delete(uid);
+      }
+      callback(
+        uids
+          .map((u) => profilesMap.get(u))
+          .filter((p): p is UserProfile => p !== undefined)
+      );
+    });
+    unsubscribers.push(unsub);
+  });
+
+  return () => unsubscribers.forEach((u) => u());
+}
+
+export function subscribeToUser(
+  uid: string,
+  callback: (profile: UserProfile | null) => void
+): Unsubscribe {
+  const ref = doc(db, 'users', uid);
+  return onSnapshot(ref, (snap) => {
+    if (snap.exists()) {
+      callback({ uid, ...snap.data() } as UserProfile);
+    } else {
+      callback(null);
+    }
+  });
 }
