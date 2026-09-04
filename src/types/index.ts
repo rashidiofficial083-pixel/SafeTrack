@@ -15,3 +15,26 @@ export function toAppUser(user: User): AppUser {
     photoURL: user.photoURL,
   };
 }
+
+export interface UserProfile {
+  uid: string;
+  displayName: string;
+  email: string;
+  photoURL: string;
+  secretCode: string;
+  trackedByUids: string[];
+  trackingUids: string[];
+  createdAt: number;
+}
+
+export type PairingRequestStatus = 'pending' | 'approved' | 'denied';
+
+export interface PairingRequest {
+  id: string;
+  fromUid: string;
+  fromDisplayName: string;
+  fromPhotoURL: string;
+  toUid: string;
+  status: PairingRequestStatus;
+  createdAt: number;
+}

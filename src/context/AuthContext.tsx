@@ -12,6 +12,7 @@ import {
   type User,
 } from 'firebase/auth';
 import { auth, googleProvider } from '@/lib/firebase';
+import { ensureUserDoc } from '@/lib/firestore';
 import { toAppUser, type AppUser } from '@/types';
 
 interface AuthContextValue {
@@ -28,8 +29,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (fbUser: User | null) => {
-      setUser(fbUser ? toAppUser(fbUser) : null);
+    const unsubscribe = onAuthStateChanged(auth, async (fbUser: User | null) => {
+      if (fbUser) {
+        const appUser = toAppUser(fbUser);
+        try {
+          await ensureUserDoc(appUser);
+        } catch (e) {
+          console.error('Failed to ensure user doc:', e);
+        }
+        setUser(appUser);
+      } else {
+        setUser(null);
+      }
       setLoading(false);
     });
     return unsubscribe;

@@ -1,0 +1,14 @@
+rules_version = '2';
+
+// TEMPORARY, will be tightened later
+// These rules allow any authenticated user to read/write all documents.
+// This is intentionally permissive for development and will be replaced
+// with stricter rules that enforce ownership and proper access control
+// in a later phase.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
