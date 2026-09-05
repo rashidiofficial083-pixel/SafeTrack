@@ -36,6 +36,7 @@ export function TrackSomeoneSheet({
   const [error, setError] = useState<string | null>(null);
   const [sendState, setSendState] = useState<SendState>('idle');
   const inputRef = useRef<HTMLInputElement>(null);
+  const [debugError, setDebugError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -98,7 +99,10 @@ export function TrackSomeoneSheet({
       };
       await createPairingRequest(fromProfile, targetUser.uid);
       setSendState('sent');
-    } catch {
+    } catch (err) {
+      console.error('Pairing request failed:', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      setDebugError(msg);
       setError('Something went wrong. Please try again.');
       setSendState('error');
     }

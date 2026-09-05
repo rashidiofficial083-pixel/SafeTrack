@@ -170,7 +170,7 @@ export function subscribeToUserProfile(
 
 export async function lookupUserByCode(
   code: string
-): Promise<UserProfile | null> {
+): Promise<PublicUser | null> {
   const lookupRef = doc(db, 'codeLookup', code);
   const lookupSnap = await getDoc(lookupRef);
   if (!lookupSnap.exists()) return null;
@@ -179,8 +179,7 @@ export async function lookupUserByCode(
   const pubSnap = await getDoc(doc(db, 'users', uid));
   if (!pubSnap.exists()) return null;
 
-  const privSnap = await getDoc(privateDocRef(uid));
-  return mergeUser(uid, pubSnap.data() as PublicUser, privSnap.data());
+  return { uid, ...pubSnap.data() } as PublicUser;
 }
 
 export async function checkExistingRequest(
