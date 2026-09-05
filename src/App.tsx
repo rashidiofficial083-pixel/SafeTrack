@@ -7,6 +7,7 @@ import { LoginPage } from '@/pages/LoginPage';
 import { HomePage } from '@/pages/HomePage';
 import { TrackPage } from '@/pages/TrackPage';
 import { LiveMapPage } from '@/pages/LiveMapPage';
+import { HistoryPage } from '@/pages/HistoryPage';
 
 function AppRoutes() {
   const { loading } = useAuth();
@@ -37,6 +38,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <LiveMapPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/track/:uid/history"
+        element={
+          <ProtectedRoute>
+            <HistoryPage />
           </ProtectedRoute>
         }
       />

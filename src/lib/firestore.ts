@@ -13,10 +13,17 @@ import {
   arrayUnion,
   arrayRemove,
   serverTimestamp,
+  Timestamp,
   type Unsubscribe,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import type { AppUser, UserProfile, PairingRequest, UserLocation } from '@/types';
+import type {
+  AppUser,
+  UserProfile,
+  PairingRequest,
+  UserLocation,
+  LocationHistoryEntry,
+} from '@/types';
 
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
@@ -32,15 +39,16 @@ function generateCode(): string {
   return `${generateCodeSegment(4)}-${generateCodeSegment(4)}`;
 }
 
+async function isCodeAvailable(code: string): Promise<boolean> {
+  const lookupRef = doc(db, 'codeLookup', code);
+  const snap = await getDoc(lookupRef);
+  return !snap.exists();
+}
+
 export async function generateUniqueCode(maxRetries = 5): Promise<string> {
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     const code = generateCode();
-    const q = query(
-      collection(db, 'users'),
-      where('secretCode', '==', code)
-    );
-    const snapshot = await getDocs(q);
-    if (snapshot.empty) return code;
+    if (await isCodeAvailable(code)) return code;
   }
   throw new Error('Could not generate a unique code after 5 attempts');
 }
@@ -54,16 +62,24 @@ export async function ensureUserDoc(user: AppUser): Promise<UserProfile> {
   }
 
   const secretCode = await generateUniqueCode();
-  const newProfile = {
+  const batch = writeBatch(db);
+
+  batch.set(ref, {
     displayName: user.displayName ?? '',
     email: user.email ?? '',
     photoURL: user.photoURL ?? '',
     secretCode,
     trackedByUids: [],
     trackingUids: [],
+    subscriptionStatus: 'trial',
     createdAt: serverTimestamp(),
-  };
-  await setDoc(ref, newProfile);
+  });
+
+  batch.set(doc(db, 'codeLookup', secretCode), {
+    uid: user.uid,
+  });
+
+  await batch.commit();
 
   const created = await getDoc(ref);
   return { uid: user.uid, ...created.data() } as UserProfile;
@@ -83,12 +99,19 @@ export function subscribeToUserProfile(
   });
 }
 
-export async function findUserByCode(code: string): Promise<UserProfile | null> {
-  const q = query(collection(db, 'users'), where('secretCode', '==', code));
-  const snapshot = await getDocs(q);
-  if (snapshot.empty) return null;
-  const d = snapshot.docs[0];
-  return { uid: d.id, ...d.data() } as UserProfile;
+export async function lookupUserByCode(
+  code: string
+): Promise<UserProfile | null> {
+  const lookupRef = doc(db, 'codeLookup', code);
+  const lookupSnap = await getDoc(lookupRef);
+  if (!lookupSnap.exists()) return null;
+
+  const uid = lookupSnap.data().uid as string;
+  const userRef = doc(db, 'users', uid);
+  const userSnap = await getDoc(userRef);
+  if (!userSnap.exists()) return null;
+
+  return { uid, ...userSnap.data() } as UserProfile;
 }
 
 export async function checkExistingRequest(
@@ -102,16 +125,23 @@ export async function checkExistingRequest(
   );
   const snapshot = await getDocs(q);
   if (snapshot.empty) return null;
-  const d = snapshot.docs[0];
-  return {
-    id: d.id,
-    fromUid: d.data().fromUid,
-    fromDisplayName: d.data().fromDisplayName,
-    fromPhotoURL: d.data().fromPhotoURL ?? '',
-    toUid: d.data().toUid,
-    status: d.data().status,
-    createdAt: d.data().createdAt?.seconds ?? 0,
-  };
+
+  let latest: PairingRequest | null = null;
+  snapshot.docs.forEach((d) => {
+    const req: PairingRequest = {
+      id: d.id,
+      fromUid: d.data().fromUid,
+      fromDisplayName: d.data().fromDisplayName,
+      fromPhotoURL: d.data().fromPhotoURL ?? '',
+      toUid: d.data().toUid,
+      status: d.data().status,
+      createdAt: d.data().createdAt?.seconds ?? 0,
+    };
+    if (!latest || req.createdAt > latest.createdAt) {
+      latest = req;
+    }
+  });
+  return latest;
 }
 
 export async function createPairingRequest(
@@ -223,8 +253,57 @@ export async function updateLocation(
       heading: location.heading,
       speed: location.speed,
       updatedAt: serverTimestamp(),
+      isLastKnown: location.isLastKnown ?? false,
+      batteryLevel: location.batteryLevel ?? null,
     },
   });
+}
+
+export async function addLocationHistoryEntry(
+  uid: string,
+  lat: number,
+  lng: number,
+  accuracy: number
+): Promise<void> {
+  const now = new Date();
+  const expireAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+  await addDoc(collection(db, 'users', uid, 'locationHistory'), {
+    lat,
+    lng,
+    accuracy,
+    recordedAt: serverTimestamp(),
+    expireAt: Timestamp.fromDate(expireAt),
+  });
+}
+
+export async function fetchLocationHistory(
+  uid: string,
+  date: Date
+): Promise<LocationHistoryEntry[]> {
+  const dayStart = new Date(date);
+  dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(date);
+  dayEnd.setHours(23, 59, 59, 999);
+
+  const q = query(
+    collection(db, 'users', uid, 'locationHistory'),
+    where('recordedAt', '>=', Timestamp.fromDate(dayStart)),
+    where('recordedAt', '<=', Timestamp.fromDate(dayEnd))
+  );
+
+  const snapshot = await getDocs(q);
+  const entries = snapshot.docs.map((d) => ({
+    id: d.id,
+    lat: d.data().lat,
+    lng: d.data().lng,
+    accuracy: d.data().accuracy,
+    recordedAt: d.data().recordedAt?.seconds ?? 0,
+    expireAt: d.data().expireAt?.seconds ?? 0,
+  })) as LocationHistoryEntry[];
+
+  entries.sort((a, b) => a.recordedAt - b.recordedAt);
+  return entries;
 }
 
 export function subscribeToTrackedUsers(
@@ -238,16 +317,6 @@ export function subscribeToTrackedUsers(
 
   const unsubscribers: Unsubscribe[] = [];
   const profilesMap = new Map<string, UserProfile>();
-
-  const checkAllReady = () => {
-    if (profilesMap.size === uids.length) {
-      callback(
-        uids
-          .map((uid) => profilesMap.get(uid))
-          .filter((p): p is UserProfile => p !== undefined)
-      );
-    }
-  };
 
   uids.forEach((uid) => {
     const unsub = onSnapshot(doc(db, 'users', uid), (snap) => {

@@ -1,12 +1,41 @@
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Search, Plus, Minus, Locate, MapPinOff } from 'lucide-react';
+import {
+  ArrowLeft,
+  Search,
+  Plus,
+  Minus,
+  Locate,
+  MapPinOff,
+  History as HistoryIcon,
+  BatteryLow,
+  BatteryMedium,
+  BatteryFull,
+  BatteryWarning,
+} from 'lucide-react';
 import type L from 'leaflet';
 import { Avatar } from '@/components/Avatar';
 import { LiveMap } from '@/components/LiveMapMarker';
 import { subscribeToUser } from '@/lib/firestore';
 import { getInitials, timeAgo, isLive } from '@/lib/utils';
 import type { UserProfile } from '@/types';
+
+const OFFLINE_THRESHOLD_SECONDS = 120;
+
+function BatteryIcon({ level }: { level: number | null | undefined }) {
+  if (level === null || level === undefined) return null;
+  const pct = Math.round(level * 100);
+  if (pct <= 15) return <BatteryLow className="w-4 h-4" />;
+  if (pct <= 50) return <BatteryMedium className="w-4 h-4" />;
+  return <BatteryFull className="w-4 h-4" />;
+}
+
+function formatSpeed(speed: number | null | undefined): string {
+  if (speed === null || speed === undefined || speed < 0.5) return 'Stationary';
+  const kmh = speed * 3.6;
+  if (kmh < 1) return 'Stationary';
+  return `${Math.round(kmh)} km/h`;
+}
 
 export function LiveMapPage() {
   const { uid } = useParams<{ uid: string }>();
@@ -46,17 +75,14 @@ export function LiveMapPage() {
     }
   };
 
-  const handleZoomIn = () => {
-    mapRef.current?.zoomIn();
-  };
-
-  const handleZoomOut = () => {
-    mapRef.current?.zoomOut();
-  };
+  const handleZoomIn = () => mapRef.current?.zoomIn();
+  const handleZoomOut = () => mapRef.current?.zoomOut();
 
   const hasLocation = !!profile?.location;
   const location = profile?.location;
   const live = hasLocation && isLive(location!.updatedAt);
+  const isOffline =
+    hasLocation && !live && Date.now() / 1000 - location!.updatedAt > OFFLINE_THRESHOLD_SECONDS;
 
   return (
     <div className="fixed inset-0 bg-[#0f1115] z-40">
@@ -91,6 +117,9 @@ export function LiveMapPage() {
             accuracy={location!.accuracy}
             heading={location!.heading}
             isMoving={(location!.speed ?? 0) > 0.5}
+            photoURL={profile?.photoURL || null}
+            initials={getInitials(profile?.displayName ?? null)}
+            isOffline={isOffline}
             autoRecenter={autoRecenter}
             onMapMove={handleMapMove}
             mapRef={(m) => {
@@ -113,7 +142,7 @@ export function LiveMapPage() {
           </div>
 
           {/* Zoom controls */}
-          <div className="absolute right-4 z-[1000] flex flex-col gap-2" style={{ bottom: '180px' }}>
+          <div className="absolute right-4 z-[1000] flex flex-col gap-2" style={{ bottom: '200px' }}>
             <button
               onClick={handleZoomIn}
               className="w-10 h-10 flex items-center justify-center rounded-lg bg-[#1a1d23]/90 backdrop-blur-sm text-gray-100 hover:bg-[#252a31]"
@@ -157,6 +186,10 @@ export function LiveMapPage() {
                         Live · updated {timeAgo(location!.updatedAt)}
                       </span>
                     </>
+                  ) : isOffline ? (
+                    <span className="text-[12px] text-gray-400">
+                      Last seen {timeAgo(location!.updatedAt)} at this location
+                    </span>
                   ) : (
                     <span className="text-[12px] text-gray-400">
                       Updated {timeAgo(location!.updatedAt)}
@@ -164,11 +197,29 @@ export function LiveMapPage() {
                   )}
                 </div>
               </div>
-              <div className="text-right flex-shrink-0">
-                <p className="text-[11px] text-gray-500">Accuracy</p>
-                <p className="text-[13px] text-gray-300 font-medium">
-                  ±{Math.round(location!.accuracy)}m
-                </p>
+
+              <div className="flex items-center gap-3 flex-shrink-0">
+                {location!.batteryLevel !== null && location!.batteryLevel !== undefined && (
+                  <div className="flex items-center gap-1">
+                    <BatteryIcon level={location!.batteryLevel} />
+                    <span className="text-[12px] text-gray-300 font-medium">
+                      {Math.round(location!.batteryLevel * 100)}%
+                    </span>
+                  </div>
+                )}
+                <div className="text-right">
+                  <p className="text-[11px] text-gray-500">{formatSpeed(location!.speed)}</p>
+                  <p className="text-[13px] text-gray-300 font-medium">
+                    ±{Math.round(location!.accuracy)}m
+                  </p>
+                </div>
+                <button
+                  onClick={() => navigate(`/track/${uid}/history`)}
+                  className="w-9 h-9 flex items-center justify-center rounded-lg bg-accent/10 text-accent hover:bg-accent/20"
+                  aria-label="History"
+                >
+                  <HistoryIcon className="w-5 h-5" />
+                </button>
               </div>
             </div>
           </div>

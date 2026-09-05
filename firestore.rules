@@ -1,14 +1,33 @@
 rules_version = '2';
-
-// TEMPORARY, will be tightened later
-// These rules allow any authenticated user to read/write all documents.
-// This is intentionally permissive for development and will be replaced
-// with stricter rules that enforce ownership and proper access control
-// in a later phase.
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if request.auth != null;
+    match /users/{userId} {
+      allow get: if request.auth != null && 
+        (request.auth.uid == userId || request.auth.uid in resource.data.trackedByUids);
+      allow list: if false;
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null && 
+        (request.auth.uid == userId || 
+         (request.auth.uid != userId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['trackingUids', 'trackedByUids'])));
+      
+      match /locationHistory/{entryId} {
+        allow read: if request.auth != null && 
+          (request.auth.uid == userId || request.auth.uid in get(/databases/$(database)/documents/users/$(userId)).data.trackedByUids);
+        allow create: if request.auth != null && request.auth.uid == userId;
+        allow update, delete: if false;
+      }
+    }
+    match /codeLookup/{code} {
+      allow get: if request.auth != null;
+      allow list: if false;
+      allow create: if request.auth != null && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if false;
+    }
+    match /pairingRequests/{requestId} {
+      allow read: if request.auth != null && 
+        (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid);
+      allow create: if request.auth != null && request.resource.data.fromUid == request.auth.uid;
+      allow update: if request.auth != null && resource.data.toUid == request.auth.uid;
     }
   }
 }

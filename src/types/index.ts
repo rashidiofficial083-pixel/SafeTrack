@@ -23,7 +23,11 @@ export interface UserLocation {
   heading: number | null;
   speed: number | null;
   updatedAt: number;
+  isLastKnown?: boolean;
+  batteryLevel?: number | null;
 }
+
+export type SubscriptionStatus = 'trial' | 'premium' | 'free';
 
 export interface UserProfile {
   uid: string;
@@ -34,6 +38,7 @@ export interface UserProfile {
   trackedByUids: string[];
   trackingUids: string[];
   location?: UserLocation;
+  subscriptionStatus: SubscriptionStatus;
   createdAt: number;
 }
 
@@ -47,4 +52,13 @@ export interface PairingRequest {
   toUid: string;
   status: PairingRequestStatus;
   createdAt: number;
+}
+
+export interface LocationHistoryEntry {
+  id: string;
+  lat: number;
+  lng: number;
+  accuracy: number;
+  recordedAt: number;
+  expireAt: number;
 }

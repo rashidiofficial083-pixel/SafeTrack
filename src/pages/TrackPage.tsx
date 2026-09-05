@@ -12,6 +12,7 @@ export function TrackPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [trackingUids, setTrackingUids] = useState<string[]>([]);
+  const [profileLoaded, setProfileLoaded] = useState(false);
   const [trackedUsers, setTrackedUsers] = useState<UserProfile[]>([]);
   const [menuOpenUid, setMenuOpenUid] = useState<string | null>(null);
   const [confirmStop, setConfirmStop] = useState<UserProfile | null>(null);
@@ -22,6 +23,7 @@ export function TrackPage() {
     if (!user) return;
     const unsub = subscribeToUserProfile(user.uid, (profile) => {
       setTrackingUids(profile?.trackingUids ?? []);
+      setProfileLoaded(true);
     });
     return unsub;
   }, [user]);
@@ -70,7 +72,22 @@ export function TrackPage() {
           {trackedUsers.length} {trackedUsers.length === 1 ? 'person' : 'people'}
         </p>
 
-        {trackedUsers.length === 0 ? (
+        {!profileLoaded ? (
+          <div className="flex flex-col gap-2">
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                className="flex items-center gap-3 p-3 rounded-card border border-gray-200 dark:border-gray-700/50 bg-white dark:bg-[#1a1d23]"
+              >
+                <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                <div className="flex-1">
+                  <div className="h-3.5 w-28 rounded animate-pulse bg-gray-200 dark:bg-gray-700" />
+                  <div className="h-2.5 w-20 rounded animate-pulse bg-gray-200 dark:bg-gray-700 mt-2" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : trackedUsers.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 gap-3">
             <div className="w-14 h-14 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
               <Users className="w-7 h-7 text-gray-400" />

@@ -4,7 +4,7 @@ import { BottomSheet } from '@/components/BottomSheet';
 import { Button } from '@/components/Button';
 import { useAuth } from '@/context/AuthContext';
 import {
-  findUserByCode,
+  lookupUserByCode,
   checkExistingRequest,
   createPairingRequest,
 } from '@/lib/firestore';
@@ -64,7 +64,7 @@ export function TrackSomeoneSheet({
     setSendState('sending');
 
     try {
-      const targetUser = await findUserByCode(formattedCode);
+      const targetUser = await lookupUserByCode(formattedCode);
       if (!targetUser) {
         setError('No account found with this code');
         setSendState('error');
@@ -74,14 +74,15 @@ export function TrackSomeoneSheet({
       const existing = await checkExistingRequest(user.uid, targetUser.uid);
       if (existing) {
         if (existing.status === 'pending') {
-          setError('Request already sent');
-        } else if (existing.status === 'approved') {
-          setError('Already tracking this account');
-        } else {
-          setError('Request already sent');
+          setError('Request already sent, waiting for approval');
+          setSendState('error');
+          return;
         }
-        setSendState('error');
-        return;
+        if (existing.status === 'approved') {
+          setError('Already tracking this account');
+          setSendState('error');
+          return;
+        }
       }
 
       const fromProfile = {
@@ -92,6 +93,7 @@ export function TrackSomeoneSheet({
         secretCode: currentSecretCode,
         trackedByUids: [],
         trackingUids: [],
+        subscriptionStatus: 'trial' as const,
         createdAt: 0,
       };
       await createPairingRequest(fromProfile, targetUser.uid);
