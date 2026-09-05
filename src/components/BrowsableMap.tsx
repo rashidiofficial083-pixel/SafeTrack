@@ -3,10 +3,10 @@ import { MapContainer, TileLayer, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { Plus, Minus } from 'lucide-react';
 
-const VOYAGER_URL =
-  'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
-const VOYAGER_ATTRIBUTION =
-  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
+const ESRI_STREET_URL =
+  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}';
+const ESRI_STREET_ATTRIBUTION =
+  'Tiles &copy; Esri — Source: Esri, HERE, Garmin, USGS, Intermap, INCREMENT P, NRCan, Esri Japan, METI, Esri China (Hong Kong), Esri Korea, Esri (Thailand), NGCC, &copy; OpenStreetMap contributors, and the GIS User Community';
 
 const DEFAULT_CENTER: [number, number] = [23.8103, 90.4125];
 const DEFAULT_ZOOM = 12;
@@ -44,7 +44,7 @@ export function BrowsableMap({ mapRef }: BrowsableMapProps) {
         className="w-full h-full"
       >
         <MapController mapRef={mapRef} />
-        <TileLayer url={VOYAGER_URL} attribution={VOYAGER_ATTRIBUTION} maxZoom={20} />
+        <TileLayer url={ESRI_STREET_URL} attribution={ESRI_STREET_ATTRIBUTION} maxZoom={19} />
       </MapContainer>
 
       {/* Custom zoom controls — bottom right, styled to match app dark theme */}
