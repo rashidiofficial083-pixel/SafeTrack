@@ -2,17 +2,26 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /users/{userId} {
-      allow get: if request.auth != null && 
-        (request.auth.uid == userId || request.auth.uid in resource.data.trackedByUids);
+      // Public profile: displayName + photoURL — readable by any authenticated user
+      allow get: if request.auth != null;
       allow list: if false;
       allow create: if request.auth != null && request.auth.uid == userId;
-      allow update: if request.auth != null && 
-        (request.auth.uid == userId || 
-         (request.auth.uid != userId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['trackingUids', 'trackedByUids'])));
+      allow update: if request.auth != null && request.auth.uid == userId;
+
+      // Private data: secretCode, location, trackingUids, trackedByUids, subscriptionStatus
+      match /private/{docId} {
+        allow get: if request.auth != null && 
+          (request.auth.uid == userId || request.auth.uid in resource.data.trackedByUids);
+        allow list: if false;
+        allow create: if request.auth != null && request.auth.uid == userId;
+        allow update: if request.auth != null && 
+          (request.auth.uid == userId || 
+           (request.auth.uid != userId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['trackingUids', 'trackedByUids'])));
+      }
       
       match /locationHistory/{entryId} {
         allow read: if request.auth != null && 
-          (request.auth.uid == userId || request.auth.uid in get(/databases/$(database)/documents/users/$(userId)).data.trackedByUids);
+          (request.auth.uid == userId || request.auth.uid in get(/databases/$(database)/documents/users/$(userId)/private/data).data.trackedByUids);
         allow create: if request.auth != null && request.auth.uid == userId;
         allow update, delete: if false;
       }

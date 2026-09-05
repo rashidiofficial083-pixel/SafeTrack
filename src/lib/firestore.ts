@@ -20,12 +20,15 @@ import { db } from '@/lib/firebase';
 import type {
   AppUser,
   UserProfile,
+  PublicUser,
   PairingRequest,
   UserLocation,
   LocationHistoryEntry,
 } from '@/types';
+import { toEpochSeconds } from '@/types';
 
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const PRIVATE_DOC = 'data';
 
 function generateCodeSegment(length: number): string {
   let result = '';
@@ -53,21 +56,59 @@ export async function generateUniqueCode(maxRetries = 5): Promise<string> {
   throw new Error('Could not generate a unique code after 5 attempts');
 }
 
-export async function ensureUserDoc(user: AppUser): Promise<UserProfile> {
-  const ref = doc(db, 'users', user.uid);
-  const existing = await getDoc(ref);
+function privateDocRef(uid: string) {
+  return doc(db, 'users', uid, 'private', PRIVATE_DOC);
+}
 
-  if (existing.exists()) {
-    return { uid: user.uid, ...existing.data() } as UserProfile;
+function parseLocation(raw: any): UserLocation | undefined {
+  if (!raw) return undefined;
+  return {
+    lat: raw.lat,
+    lng: raw.lng,
+    accuracy: raw.accuracy,
+    heading: raw.heading ?? null,
+    speed: raw.speed ?? null,
+    updatedAt: toEpochSeconds(raw.updatedAt),
+    isLastKnown: raw.isLastKnown ?? false,
+    batteryLevel: raw.batteryLevel ?? null,
+  };
+}
+
+function mergeUser(uid: string, pub: PublicUser, priv: any): UserProfile {
+  return {
+    uid,
+    displayName: pub.displayName,
+    photoURL: pub.photoURL,
+    email: priv?.email ?? '',
+    secretCode: priv?.secretCode ?? '',
+    trackedByUids: priv?.trackedByUids ?? [],
+    trackingUids: priv?.trackingUids ?? [],
+    subscriptionStatus: priv?.subscriptionStatus ?? 'trial',
+    location: parseLocation(priv?.location),
+    createdAt: toEpochSeconds(priv?.createdAt),
+  };
+}
+
+export async function ensureUserDoc(user: AppUser): Promise<UserProfile> {
+  const pubRef = doc(db, 'users', user.uid);
+  const privRef = privateDocRef(user.uid);
+  const existingPub = await getDoc(pubRef);
+  const existingPriv = await getDoc(privRef);
+
+  if (existingPub.exists() && existingPriv.exists()) {
+    return mergeUser(user.uid, existingPub.data() as PublicUser, existingPriv.data());
   }
 
   const secretCode = await generateUniqueCode();
   const batch = writeBatch(db);
 
-  batch.set(ref, {
+  batch.set(pubRef, {
     displayName: user.displayName ?? '',
-    email: user.email ?? '',
     photoURL: user.photoURL ?? '',
+  });
+
+  batch.set(privRef, {
+    email: user.email ?? '',
     secretCode,
     trackedByUids: [],
     trackingUids: [],
@@ -81,22 +122,50 @@ export async function ensureUserDoc(user: AppUser): Promise<UserProfile> {
 
   await batch.commit();
 
-  const created = await getDoc(ref);
-  return { uid: user.uid, ...created.data() } as UserProfile;
+  const [pubSnap, privSnap] = await Promise.all([getDoc(pubRef), getDoc(privRef)]);
+  return mergeUser(user.uid, pubSnap.data() as PublicUser, privSnap.data());
 }
 
 export function subscribeToUserProfile(
   uid: string,
   callback: (profile: UserProfile | null) => void
 ): Unsubscribe {
-  const ref = doc(db, 'users', uid);
-  return onSnapshot(ref, (snap) => {
-    if (snap.exists()) {
-      callback({ uid, ...snap.data() } as UserProfile);
-    } else {
+  const pubRef = doc(db, 'users', uid);
+  const privRef = privateDocRef(uid);
+
+  let pubData: PublicUser | null = null;
+  let privData: any = null;
+
+  const emit = () => {
+    if (pubData && privData) {
+      callback(mergeUser(uid, pubData, privData));
+    } else if (pubData) {
       callback(null);
     }
+  };
+
+  const unsubPub = onSnapshot(pubRef, (snap) => {
+    if (snap.exists()) {
+      pubData = { uid, ...snap.data() } as PublicUser;
+    } else {
+      pubData = null;
+    }
+    emit();
   });
+
+  const unsubPriv = onSnapshot(privRef, (snap) => {
+    if (snap.exists()) {
+      privData = snap.data();
+    } else {
+      privData = null;
+    }
+    emit();
+  });
+
+  return () => {
+    unsubPub();
+    unsubPriv();
+  };
 }
 
 export async function lookupUserByCode(
@@ -107,11 +176,11 @@ export async function lookupUserByCode(
   if (!lookupSnap.exists()) return null;
 
   const uid = lookupSnap.data().uid as string;
-  const userRef = doc(db, 'users', uid);
-  const userSnap = await getDoc(userRef);
-  if (!userSnap.exists()) return null;
+  const pubSnap = await getDoc(doc(db, 'users', uid));
+  if (!pubSnap.exists()) return null;
 
-  return { uid, ...userSnap.data() } as UserProfile;
+  const privSnap = await getDoc(privateDocRef(uid));
+  return mergeUser(uid, pubSnap.data() as PublicUser, privSnap.data());
 }
 
 export async function checkExistingRequest(
@@ -135,7 +204,7 @@ export async function checkExistingRequest(
       fromPhotoURL: d.data().fromPhotoURL ?? '',
       toUid: d.data().toUid,
       status: d.data().status,
-      createdAt: d.data().createdAt?.seconds ?? 0,
+      createdAt: toEpochSeconds(d.data().createdAt),
     };
     if (!latest || req.createdAt > latest.createdAt) {
       latest = req;
@@ -175,7 +244,7 @@ export function subscribeToIncomingRequests(
       fromPhotoURL: d.data().fromPhotoURL ?? '',
       toUid: d.data().toUid,
       status: d.data().status,
-      createdAt: d.data().createdAt?.seconds ?? 0,
+      createdAt: toEpochSeconds(d.data().createdAt),
     })) as PairingRequest[];
     requests.sort((a, b) => b.createdAt - a.createdAt);
     callback(requests);
@@ -193,11 +262,11 @@ export async function approvePairingRequest(
     status: 'approved',
   });
 
-  batch.update(doc(db, 'users', currentUid), {
+  batch.update(privateDocRef(currentUid), {
     trackedByUids: arrayUnion(fromUid),
   });
 
-  batch.update(doc(db, 'users', fromUid), {
+  batch.update(privateDocRef(fromUid), {
     trackingUids: arrayUnion(currentUid),
   });
 
@@ -218,24 +287,37 @@ export async function stopTracking(
 ): Promise<void> {
   const batch = writeBatch(db);
 
-  batch.update(doc(db, 'users', currentUid), {
+  batch.update(privateDocRef(currentUid), {
     trackingUids: arrayRemove(targetUid),
   });
 
-  batch.update(doc(db, 'users', targetUid), {
+  batch.update(privateDocRef(targetUid), {
     trackedByUids: arrayRemove(currentUid),
   });
 
   await batch.commit();
 }
 
+export async function fetchPublicUserProfiles(uids: string[]): Promise<PublicUser[]> {
+  if (uids.length === 0) return [];
+  const profiles: PublicUser[] = [];
+  for (const uid of uids) {
+    const snap = await getDoc(doc(db, 'users', uid));
+    if (snap.exists()) {
+      profiles.push({ uid, ...snap.data() } as PublicUser);
+    }
+  }
+  return profiles;
+}
+
 export async function fetchUserProfiles(uids: string[]): Promise<UserProfile[]> {
   if (uids.length === 0) return [];
   const profiles: UserProfile[] = [];
   for (const uid of uids) {
-    const snap = await getDoc(doc(db, 'users', uid));
-    if (snap.exists()) {
-      profiles.push({ uid, ...snap.data() } as UserProfile);
+    const pubSnap = await getDoc(doc(db, 'users', uid));
+    const privSnap = await getDoc(privateDocRef(uid));
+    if (pubSnap.exists() && privSnap.exists()) {
+      profiles.push(mergeUser(uid, pubSnap.data() as PublicUser, privSnap.data()));
     }
   }
   return profiles;
@@ -245,7 +327,7 @@ export async function updateLocation(
   uid: string,
   location: UserLocation
 ): Promise<void> {
-  await updateDoc(doc(db, 'users', uid), {
+  await updateDoc(privateDocRef(uid), {
     location: {
       lat: location.lat,
       lng: location.lng,
@@ -298,8 +380,8 @@ export async function fetchLocationHistory(
     lat: d.data().lat,
     lng: d.data().lng,
     accuracy: d.data().accuracy,
-    recordedAt: d.data().recordedAt?.seconds ?? 0,
-    expireAt: d.data().expireAt?.seconds ?? 0,
+    recordedAt: toEpochSeconds(d.data().recordedAt),
+    expireAt: toEpochSeconds(d.data().expireAt),
   })) as LocationHistoryEntry[];
 
   entries.sort((a, b) => a.recordedAt - b.recordedAt);
@@ -319,9 +401,12 @@ export function subscribeToTrackedUsers(
   const profilesMap = new Map<string, UserProfile>();
 
   uids.forEach((uid) => {
-    const unsub = onSnapshot(doc(db, 'users', uid), (snap) => {
-      if (snap.exists()) {
-        profilesMap.set(uid, { uid, ...snap.data() } as UserProfile);
+    let pubData: PublicUser | null = null;
+    let privData: any = null;
+
+    const emit = () => {
+      if (pubData && privData) {
+        profilesMap.set(uid, mergeUser(uid, pubData, privData));
       } else {
         profilesMap.delete(uid);
       }
@@ -330,8 +415,19 @@ export function subscribeToTrackedUsers(
           .map((u) => profilesMap.get(u))
           .filter((p): p is UserProfile => p !== undefined)
       );
+    };
+
+    const unsubPub = onSnapshot(doc(db, 'users', uid), (snap) => {
+      pubData = snap.exists() ? ({ uid, ...snap.data() } as PublicUser) : null;
+      emit();
     });
-    unsubscribers.push(unsub);
+
+    const unsubPriv = onSnapshot(privateDocRef(uid), (snap) => {
+      privData = snap.exists() ? snap.data() : null;
+      emit();
+    });
+
+    unsubscribers.push(unsubPub, unsubPriv);
   });
 
   return () => unsubscribers.forEach((u) => u());
@@ -341,12 +437,5 @@ export function subscribeToUser(
   uid: string,
   callback: (profile: UserProfile | null) => void
 ): Unsubscribe {
-  const ref = doc(db, 'users', uid);
-  return onSnapshot(ref, (snap) => {
-    if (snap.exists()) {
-      callback({ uid, ...snap.data() } as UserProfile);
-    } else {
-      callback(null);
-    }
-  });
+  return subscribeToUserProfile(uid, callback);
 }

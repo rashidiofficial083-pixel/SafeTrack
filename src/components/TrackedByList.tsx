@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { ChevronDown, Eye, EyeOff, Users } from 'lucide-react';
 import { Avatar } from '@/components/Avatar';
-import { fetchUserProfiles } from '@/lib/firestore';
+import { fetchPublicUserProfiles } from '@/lib/firestore';
 import { getInitials } from '@/lib/utils';
-import type { UserProfile } from '@/types';
+import type { PublicUser } from '@/types';
 
 interface TrackedByListProps {
   trackedByUids: string[];
@@ -11,7 +11,7 @@ interface TrackedByListProps {
 
 export function TrackedByList({ trackedByUids }: TrackedByListProps) {
   const [expanded, setExpanded] = useState(false);
-  const [profiles, setProfiles] = useState<UserProfile[]>([]);
+  const [profiles, setProfiles] = useState<PublicUser[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -19,7 +19,7 @@ export function TrackedByList({ trackedByUids }: TrackedByListProps) {
     if (expanded && trackedByUids.length > 0 && profiles.length === 0) {
       setLoading(true);
       setError(null);
-      fetchUserProfiles(trackedByUids)
+      fetchPublicUserProfiles(trackedByUids)
         .then(setProfiles)
         .catch(() => setError('Could not load list. Please try again.'))
         .finally(() => setLoading(false));
