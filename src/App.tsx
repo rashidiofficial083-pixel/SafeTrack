@@ -8,6 +8,7 @@ import { HomePage } from '@/pages/HomePage';
 import { TrackPage } from '@/pages/TrackPage';
 import { LiveMapPage } from '@/pages/LiveMapPage';
 import { HistoryPage } from '@/pages/HistoryPage';
+import { ProfilePage } from '@/pages/ProfilePage';
 
 function AppRoutes() {
   const { loading } = useAuth();
@@ -46,6 +47,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <HistoryPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/profile"
+        element={
+          <ProtectedRoute>
+            <ProfilePage />
           </ProtectedRoute>
         }
       />

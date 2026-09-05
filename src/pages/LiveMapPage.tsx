@@ -2,22 +2,27 @@ import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
-  Search,
   Plus,
   Minus,
   Locate,
   MapPinOff,
   History as HistoryIcon,
+  RefreshCw,
+  Clock,
+  Navigation,
   BatteryLow,
   BatteryMedium,
   BatteryFull,
-  BatteryWarning,
+  Crosshair,
+  MapPinCheck,
 } from 'lucide-react';
 import type L from 'leaflet';
 import { Avatar } from '@/components/Avatar';
 import { LiveMap } from '@/components/LiveMapMarker';
+import { LayerSwitcher } from '@/components/LayerSwitcher';
 import { subscribeToUser } from '@/lib/firestore';
 import { getInitials, timeAgo, isLive } from '@/lib/utils';
+import type { MapLayerType } from '@/lib/mapTiles';
 import type { UserProfile } from '@/types';
 
 const OFFLINE_THRESHOLD_SECONDS = 120;
@@ -43,6 +48,8 @@ export function LiveMapPage() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [autoRecenter, setAutoRecenter] = useState(true);
+  const [activeLayer, setActiveLayer] = useState<MapLayerType>('hybrid');
+  const [refreshKey, setRefreshKey] = useState(0);
   const mapRef = useRef<L.Map | null>(null);
   const [, setTick] = useState(0);
 
@@ -53,7 +60,7 @@ export function LiveMapPage() {
       setLoading(false);
     });
     return unsub;
-  }, [uid]);
+  }, [uid, refreshKey]);
 
   useEffect(() => {
     const interval = setInterval(() => setTick((t) => t + 1), 5000);
@@ -75,14 +82,33 @@ export function LiveMapPage() {
     }
   };
 
+  const handleRefresh = () => {
+    setLoading(true);
+    setRefreshKey((k) => k + 1);
+  };
+
   const handleZoomIn = () => mapRef.current?.zoomIn();
   const handleZoomOut = () => mapRef.current?.zoomOut();
+
+  const handleDirections = () => {
+    if (!profile?.location) return;
+    const { lat, lng } = profile.location;
+    window.open(
+      `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`,
+      '_blank',
+      'noopener,noreferrer'
+    );
+  };
 
   const hasLocation = !!profile?.location;
   const location = profile?.location;
   const live = hasLocation && isLive(location!.updatedAt);
   const isOffline =
     hasLocation && !live && Date.now() / 1000 - location!.updatedAt > OFFLINE_THRESHOLD_SECONDS;
+
+  const hasBattery =
+    location!.batteryLevel !== null &&
+    location!.batteryLevel !== undefined;
 
   return (
     <div className="fixed inset-0 bg-[#0f1115] z-40">
@@ -125,6 +151,7 @@ export function LiveMapPage() {
             mapRef={(m) => {
               mapRef.current = m;
             }}
+            activeLayer={activeLayer}
           />
 
           {/* Top overlay */}
@@ -135,49 +162,59 @@ export function LiveMapPage() {
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
-            <div className="flex-1 h-9 flex items-center gap-2 px-3 rounded-lg bg-[#1a1d23]/90 backdrop-blur-sm">
-              <Search className="w-4 h-4 text-gray-500" />
-              <span className="text-[13px] text-gray-500">Search places...</span>
+          </div>
+
+          {/* Right-side controls: layer switcher + zoom */}
+          <div className="absolute right-4 z-[1000] flex flex-col gap-3" style={{ bottom: '280px' }}>
+            <LayerSwitcher activeLayer={activeLayer} onLayerChange={setActiveLayer} />
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={handleZoomIn}
+                className="w-10 h-10 flex items-center justify-center rounded-lg bg-[#1a1d23]/90 backdrop-blur-sm text-gray-100 hover:bg-[#252a31] border border-gray-700/50"
+              >
+                <Plus className="w-5 h-5" />
+              </button>
+              <button
+                onClick={handleZoomOut}
+                className="w-10 h-10 flex items-center justify-center rounded-lg bg-[#1a1d23]/90 backdrop-blur-sm text-gray-100 hover:bg-[#252a31] border border-gray-700/50"
+              >
+                <Minus className="w-5 h-5" />
+              </button>
+              <button
+                onClick={handleRecenter}
+                className="w-10 h-10 flex items-center justify-center rounded-lg bg-accent text-black hover:bg-accent-muted"
+              >
+                <Locate className="w-5 h-5" />
+              </button>
             </div>
           </div>
 
-          {/* Zoom controls */}
-          <div className="absolute right-4 z-[1000] flex flex-col gap-2" style={{ bottom: '200px' }}>
-            <button
-              onClick={handleZoomIn}
-              className="w-10 h-10 flex items-center justify-center rounded-lg bg-[#1a1d23]/90 backdrop-blur-sm text-gray-100 hover:bg-[#252a31]"
-            >
-              <Plus className="w-5 h-5" />
-            </button>
-            <button
-              onClick={handleZoomOut}
-              className="w-10 h-10 flex items-center justify-center rounded-lg bg-[#1a1d23]/90 backdrop-blur-sm text-gray-100 hover:bg-[#252a31]"
-            >
-              <Minus className="w-5 h-5" />
-            </button>
-            <button
-              onClick={handleRecenter}
-              className="w-10 h-10 flex items-center justify-center rounded-lg bg-accent text-black hover:bg-accent-muted"
-            >
-              <Locate className="w-5 h-5" />
-            </button>
-          </div>
-
           {/* Bottom info bar */}
-          <div className="absolute bottom-0 left-0 right-0 z-[1000] p-4 pb-5 bg-gradient-to-t from-[#0f1115] via-[#0f1115]/95 to-transparent">
-            <div className="flex items-center gap-3 p-3 rounded-card bg-[#1a1d23] border border-gray-700/50">
-              <Avatar
-                photoURL={profile?.photoURL || null}
-                initials={getInitials(profile?.displayName ?? null)}
-                size="md"
-              />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-100 truncate">
-                  {profile?.displayName ?? 'Unknown'}
-                </p>
-                <div className="flex items-center gap-1.5 mt-0.5">
+          <div className="absolute bottom-0 left-0 right-0 z-[1000] bg-gradient-to-t from-[#0f1115] via-[#0f1115]/95 to-transparent pb-5 pt-8 px-4">
+            <div className="rounded-t-2xl bg-[#1a1d23] border border-gray-700/50 p-4">
+              {/* Row 1: avatar + name + status + refresh */}
+              <div className="flex items-center gap-3">
+                <div className="relative flex-shrink-0">
+                  <div className="rounded-full" style={{ border: '2px solid #2DD4BF' }}>
+                    <Avatar
+                      photoURL={profile?.photoURL || null}
+                      initials={getInitials(profile?.displayName ?? null)}
+                      size="md"
+                    />
+                  </div>
+                  <span
+                    className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-[#1a1d23] ${
+                      live ? 'bg-success' : 'bg-amber-400'
+                    }`}
+                  />
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <p className="text-[15px] font-bold text-gray-100 truncate">
+                    {profile?.displayName ?? 'Unknown'}
+                  </p>
                   {live ? (
-                    <>
+                    <div className="flex items-center gap-1.5 mt-0.5">
                       <span className="relative flex w-2 h-2">
                         <span className="absolute inline-flex h-full w-full rounded-full bg-success opacity-60 animate-ping" />
                         <span className="relative inline-flex rounded-full h-2 w-2 bg-success" />
@@ -185,40 +222,65 @@ export function LiveMapPage() {
                       <span className="text-[12px] text-success font-medium">
                         Live · updated {timeAgo(location!.updatedAt)}
                       </span>
-                    </>
-                  ) : isOffline ? (
-                    <span className="text-[12px] text-gray-400">
-                      Last seen {timeAgo(location!.updatedAt)} at this location
-                    </span>
+                    </div>
                   ) : (
-                    <span className="text-[12px] text-gray-400">
-                      Updated {timeAgo(location!.updatedAt)}
-                    </span>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <Clock className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                      <span className="text-[12px] text-amber-400">
+                        Last seen {timeAgo(location!.updatedAt)} at this location
+                      </span>
+                    </div>
                   )}
                 </div>
+
+                <button
+                  onClick={handleRefresh}
+                  className="w-9 h-9 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-800 hover:text-gray-200 flex-shrink-0 transition-colors"
+                  aria-label="Refresh location"
+                >
+                  <RefreshCw className="w-4.5 h-4.5" />
+                </button>
               </div>
 
-              <div className="flex items-center gap-3 flex-shrink-0">
-                {location!.batteryLevel !== null && location!.batteryLevel !== undefined && (
-                  <div className="flex items-center gap-1">
+              {/* Row 2: stat grid */}
+              <div className={`grid gap-2 mt-3 ${hasBattery ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                {hasBattery && (
+                  <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-[#0f1115] border border-gray-700/30">
                     <BatteryIcon level={location!.batteryLevel} />
-                    <span className="text-[12px] text-gray-300 font-medium">
-                      {Math.round(location!.batteryLevel * 100)}%
+                    <span className="text-[13px] text-gray-200 font-medium tabular-nums">
+                      {Math.round((location!.batteryLevel as number) * 100)}%
                     </span>
                   </div>
                 )}
-                <div className="text-right">
-                  <p className="text-[11px] text-gray-500">{formatSpeed(location!.speed)}</p>
-                  <p className="text-[13px] text-gray-300 font-medium">
-                    ±{Math.round(location!.accuracy)}m
-                  </p>
+                <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-[#0f1115] border border-gray-700/30">
+                  <MapPinCheck className="w-4 h-4 text-accent flex-shrink-0" />
+                  <span className="text-[13px] text-gray-200 font-medium truncate">
+                    {formatSpeed(location!.speed)}
+                  </span>
                 </div>
+                <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-[#0f1115] border border-gray-700/30">
+                  <Crosshair className="w-4 h-4 text-accent flex-shrink-0" />
+                  <span className="text-[13px] text-gray-200 font-medium tabular-nums">
+                    ±{Math.round(location!.accuracy)}m
+                  </span>
+                </div>
+              </div>
+
+              {/* Row 3: action buttons */}
+              <div className="flex gap-2 mt-3">
                 <button
                   onClick={() => navigate(`/track/${uid}/history`)}
-                  className="w-9 h-9 flex items-center justify-center rounded-lg bg-accent/10 text-accent hover:bg-accent/20"
-                  aria-label="History"
+                  className="flex-1 h-10 flex items-center justify-center gap-2 rounded-lg border border-gray-600 bg-transparent text-sm font-medium text-gray-200 hover:bg-gray-800 transition-colors"
                 >
-                  <HistoryIcon className="w-5 h-5" />
+                  <HistoryIcon className="w-4 h-4" />
+                  History
+                </button>
+                <button
+                  onClick={handleDirections}
+                  className="flex-1 h-10 flex items-center justify-center gap-2 rounded-lg border border-accent bg-transparent text-sm font-medium text-accent hover:bg-accent/10 transition-colors"
+                >
+                  <Navigation className="w-4 h-4" />
+                  Directions
                 </button>
               </div>
             </div>

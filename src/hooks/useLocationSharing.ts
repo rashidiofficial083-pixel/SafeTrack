@@ -10,6 +10,7 @@ type LocationStatus = 'idle' | 'sharing' | 'denied' | 'error' | 'unsupported';
 interface UseLocationSharingResult {
   status: LocationStatus;
   retry: () => void;
+  accuracy: number | null;
 }
 
 const THROTTLE_MS = 8000;
@@ -36,6 +37,7 @@ export function useLocationSharing(
   uid: string | null
 ): UseLocationSharingResult {
   const [status, setStatus] = useState<LocationStatus>('idle');
+  const [accuracy, setAccuracy] = useState<number | null>(null);
   const watchIdRef = useRef<number | null>(null);
   const lastWriteRef = useRef<number>(0);
   const lastHistoryTimeRef = useRef<number>(0);
@@ -156,6 +158,7 @@ export function useLocationSharing(
           heading ?? null,
           speed ?? null
         );
+        setAccuracy(accuracy);
       },
       (err) => {
         if (err.code === err.PERMISSION_DENIED) {
@@ -238,5 +241,5 @@ export function useLocationSharing(
     startWatch();
   };
 
-  return { status, retry };
+  return { status, retry, accuracy };
 }

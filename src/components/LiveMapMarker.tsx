@@ -8,7 +8,15 @@ import {
   useMap,
 } from 'react-leaflet';
 import L from 'leaflet';
-import { tileUrl, tileAttribution } from '@/lib/mapTiles';
+import {
+  tileUrl,
+  tileAttribution,
+  STREET_LAYER,
+  SATELLITE_LAYER,
+  HYBRID_ROADS_LAYER,
+  HYBRID_LABELS_LAYER,
+  type MapLayerType,
+} from '@/lib/mapTiles';
 
 const ACCENT_COLOR = '#2DD4BF';
 const OFFLINE_COLOR = '#6b7280';
@@ -225,6 +233,7 @@ interface FullMapProps {
   autoRecenter: boolean;
   onMapMove: () => void;
   mapRef: (map: L.Map) => void;
+  activeLayer: MapLayerType;
 }
 
 function MapEventSetup({
@@ -246,6 +255,48 @@ function MapEventSetup({
   return null;
 }
 
+function TileLayerSwitcher({ activeLayer }: { activeLayer: MapLayerType }) {
+  const map = useMap();
+  const currentLayerRef = useRef<MapLayerType | null>(null);
+  const tileLayersRef = useRef<L.TileLayer[]>([]);
+
+  useEffect(() => {
+    if (currentLayerRef.current === activeLayer) return;
+    currentLayerRef.current = activeLayer;
+
+    tileLayersRef.current.forEach((layer) => map.removeLayer(layer));
+    tileLayersRef.current = [];
+
+    if (activeLayer === 'street') {
+      const layer = L.tileLayer(STREET_LAYER.url, {
+        attribution: STREET_LAYER.attribution,
+        maxZoom: STREET_LAYER.maxZoom,
+      }).addTo(map);
+      tileLayersRef.current.push(layer);
+    } else if (activeLayer === 'satellite') {
+      const layer = L.tileLayer(SATELLITE_LAYER.url, {
+        attribution: SATELLITE_LAYER.attribution,
+        maxZoom: SATELLITE_LAYER.maxZoom,
+      }).addTo(map);
+      tileLayersRef.current.push(layer);
+    } else if (activeLayer === 'hybrid') {
+      const base = L.tileLayer(SATELLITE_LAYER.url, {
+        attribution: SATELLITE_LAYER.attribution,
+        maxZoom: SATELLITE_LAYER.maxZoom,
+      }).addTo(map);
+      const roads = L.tileLayer(HYBRID_ROADS_LAYER.url, {
+        maxZoom: HYBRID_ROADS_LAYER.maxZoom,
+      }).addTo(map);
+      const labels = L.tileLayer(HYBRID_LABELS_LAYER.url, {
+        maxZoom: HYBRID_LABELS_LAYER.maxZoom,
+      }).addTo(map);
+      tileLayersRef.current.push(base, roads, labels);
+    }
+  }, [activeLayer, map]);
+
+  return null;
+}
+
 export function LiveMap({
   lat,
   lng,
@@ -258,6 +309,7 @@ export function LiveMap({
   autoRecenter,
   onMapMove,
   mapRef,
+  activeLayer,
 }: FullMapProps) {
   return (
     <MapContainer
@@ -268,7 +320,7 @@ export function LiveMap({
       className="w-full h-full"
     >
       <MapEventSetup onMove={onMapMove} mapRef={mapRef} />
-      <TileLayer url={tileUrl} attribution={tileAttribution} />
+      <TileLayerSwitcher activeLayer={activeLayer} />
       <LiveMapMarker
         lat={lat}
         lng={lng}
