@@ -8,6 +8,7 @@ import {
   Keyboard,
   Camera,
   CameraOff,
+  RotateCw,
 } from 'lucide-react';
 import { BottomSheet } from '@/components/BottomSheet';
 import { Button } from '@/components/Button';
@@ -258,10 +259,17 @@ function QRScannerTab({
   const html5ScannerRef = useRef<Html5QrcodeInstance | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
+  const [scanned, setScanned] = useState(false);
+  const scannedRef = useRef(false);
+  const [scanSession, setScanSession] = useState(0);
 
   useEffect(() => {
     let mounted = true;
     let startPromise: Promise<unknown> | null = null;
+    scannedRef.current = false;
+    setScanned(false);
+    setScanning(false);
+    setCameraError(null);
 
     const stopAndClean = (scanner: Html5QrcodeInstance) => {
       const state = scanner.getState();
@@ -305,8 +313,13 @@ function QRScannerTab({
           { facingMode: 'environment' },
           { fps: 10, qrbox: { width: 220, height: 220 } },
           (decodedText: string) => {
-            if (sendState === 'sending') return;
-            onScan(decodedText);
+            if (scannedRef.current) return;
+            scannedRef.current = true;
+            stopAndClean(scanner);
+            setScanned(true);
+            setTimeout(() => {
+              if (mounted) onScan(decodedText);
+            }, 700);
           },
           () => {}
         );
@@ -352,7 +365,11 @@ function QRScannerTab({
       html5ScannerRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [scanSession]);
+
+  const handleScanAgain = () => {
+    setScanSession((s) => s + 1);
+  };
 
   return (
     <div className="flex flex-col gap-3">
@@ -388,19 +405,49 @@ function QRScannerTab({
               </div>
             </div>
 
-            {!scanning && (
+            {!scanning && !scanned && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/50">
                 <Loader2 className="w-6 h-6 text-accent animate-spin" />
               </div>
             )}
+
+            {scanned && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 gap-2">
+                <CheckCircle2 className="w-12 h-12 text-success" />
+                <span className="text-[14px] text-success font-medium">Code scanned!</span>
+              </div>
+            )}
           </div>
 
-          <p className="text-[13px] text-gray-500 dark:text-gray-400 text-center flex items-center justify-center gap-1.5">
-            <Camera className="w-3.5 h-3.5" />
-            Point camera at their QR code
-          </p>
+          {scanned ? (
+            sendState === 'sending' ? (
+              <div className="flex items-center justify-center gap-2 text-[13px] text-gray-500 dark:text-gray-400">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Looking up code...
+              </div>
+            ) : error ? (
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center gap-2 text-sm text-red-500">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  {error}
+                </div>
+                <button
+                  onClick={handleScanAgain}
+                  className="flex items-center justify-center gap-2 text-[13px] font-medium text-accent hover:text-accent-muted transition-colors"
+                >
+                  <RotateCw className="w-4 h-4" />
+                  Scan again
+                </button>
+              </div>
+            ) : null
+          ) : (
+            <p className="text-[13px] text-gray-500 dark:text-gray-400 text-center flex items-center justify-center gap-1.5">
+              <Camera className="w-3.5 h-3.5" />
+              Point camera at their QR code
+            </p>
+          )}
 
-          {error && (
+          {error && !scanned && (
             <div className="flex items-center gap-2 text-sm text-red-500">
               <AlertCircle className="w-4 h-4 flex-shrink-0" />
               {error}
