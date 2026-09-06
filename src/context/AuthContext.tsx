@@ -52,11 +52,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = async () => {
     if (Capacitor.isNativePlatform()) {
-      const result = await FirebaseAuthentication.signInWithGoogle();
-      const idToken = result.credential?.idToken;
-      if (!idToken) throw new Error('Google Sign-In failed: no ID token returned');
-      const credential = GoogleAuthProvider.credential(idToken);
-      await signInWithCredential(auth, credential);
+      try {
+        const result = await FirebaseAuthentication.signInWithGoogle();
+        const idToken = result.credential?.idToken;
+        if (!idToken) throw new Error('Google Sign-In failed: no ID token returned');
+        const credential = GoogleAuthProvider.credential(idToken);
+        await signInWithCredential(auth, credential);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error('[Auth] Native Google Sign-In failed:', msg, err);
+        throw new Error(`Sign-in failed: ${msg}`);
+      }
     } else {
       await signInWithPopup(auth, googleProvider);
     }

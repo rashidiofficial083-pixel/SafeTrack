@@ -40,8 +40,10 @@ export function LoginPage() {
     setSigningIn(true);
     try {
       await signIn();
-    } catch {
-      setError('Sign in failed. Please try again.');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[Login] Sign-in error:', msg);
+      setError(msg);
     } finally {
       setSigningIn(false);
     }
