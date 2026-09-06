@@ -17,6 +17,7 @@ import {
   lookupUserByCode,
   checkExistingRequest,
   createPairingRequest,
+  isCurrentlyTracking,
 } from '@/lib/firestore';
 import { cn } from '@/lib/utils';
 import type { Html5Qrcode } from 'html5-qrcode';
@@ -99,17 +100,17 @@ export function TrackSomeoneSheet({
         }
 
         const existing = await checkExistingRequest(user.uid, targetUser.uid);
-        if (existing) {
-          if (existing.status === 'pending') {
-            setError('Request already sent, waiting for approval');
-            setSendState('error');
-            return;
-          }
-          if (existing.status === 'approved') {
-            setError('Already tracking this account');
-            setSendState('error');
-            return;
-          }
+        if (existing && existing.status === 'pending') {
+          setError('Request already sent, waiting for approval');
+          setSendState('error');
+          return;
+        }
+
+        const alreadyTracking = await isCurrentlyTracking(user.uid, targetUser.uid);
+        if (alreadyTracking) {
+          setError('Already tracking this account');
+          setSendState('error');
+          return;
         }
 
         const fromProfile = {

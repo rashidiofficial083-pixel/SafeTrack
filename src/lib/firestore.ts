@@ -189,7 +189,8 @@ export async function checkExistingRequest(
   const q = query(
     collection(db, 'pairingRequests'),
     where('fromUid', '==', fromUid),
-    where('toUid', '==', toUid)
+    where('toUid', '==', toUid),
+    where('status', '==', 'pending')
   );
   const snapshot = await getDocs(q);
   if (snapshot.empty) return null;
@@ -210,6 +211,16 @@ export async function checkExistingRequest(
     }
   });
   return latest;
+}
+
+export async function isCurrentlyTracking(
+  fromUid: string,
+  targetUid: string
+): Promise<boolean> {
+  const privSnap = await getDoc(privateDocRef(fromUid));
+  if (!privSnap.exists()) return false;
+  const trackingUids: string[] = privSnap.data().trackingUids ?? [];
+  return trackingUids.includes(targetUid);
 }
 
 export async function createPairingRequest(
