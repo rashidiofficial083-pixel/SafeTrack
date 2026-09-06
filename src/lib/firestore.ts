@@ -294,6 +294,19 @@ export async function stopTracking(
     trackedByUids: arrayRemove(currentUid),
   });
 
+  const q = query(
+    collection(db, 'pairingRequests'),
+    where('fromUid', '==', currentUid),
+    where('toUid', '==', targetUid),
+    where('status', '==', 'approved')
+  );
+  const snapshot = await getDocs(q);
+  snapshot.docs.forEach((d) => {
+    batch.update(doc(db, 'pairingRequests', d.id), {
+      status: 'revoked',
+    });
+  });
+
   await batch.commit();
 }
 
