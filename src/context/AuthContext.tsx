@@ -6,11 +6,15 @@ import {
   type ReactNode,
 } from 'react';
 import {
+  GoogleAuthProvider,
   onAuthStateChanged,
+  signInWithCredential,
   signInWithPopup,
   signOut as firebaseSignOut,
   type User,
 } from 'firebase/auth';
+import { Capacitor } from '@capacitor/core';
+import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
 import { auth, googleProvider } from '@/lib/firebase';
 import { ensureUserDoc } from '@/lib/firestore';
 import { toAppUser, type AppUser } from '@/types';
@@ -47,7 +51,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signIn = async () => {
-    await signInWithPopup(auth, googleProvider);
+    if (Capacitor.isNativePlatform()) {
+      const result = await FirebaseAuthentication.signInWithGoogle();
+      const idToken = result.credential?.idToken;
+      if (!idToken) throw new Error('Google Sign-In failed: no ID token returned');
+      const credential = GoogleAuthProvider.credential(idToken);
+      await signInWithCredential(auth, credential);
+    } else {
+      await signInWithPopup(auth, googleProvider);
+    }
   };
 
   const signOut = async () => {
