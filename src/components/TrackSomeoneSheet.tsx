@@ -18,6 +18,9 @@ import {
   createPairingRequest,
 } from '@/lib/firestore';
 import { cn } from '@/lib/utils';
+import type { Html5Qrcode } from 'html5-qrcode';
+
+type Html5QrcodeInstance = InstanceType<typeof Html5Qrcode>;
 
 interface TrackSomeoneSheetProps {
   open: boolean;
@@ -252,12 +255,41 @@ function QRScannerTab({
   onSwitchToCode: () => void;
 }) {
   const scannerRef = useRef<HTMLDivElement>(null);
-  const html5ScannerRef = useRef<any>(null);
+  const html5ScannerRef = useRef<Html5QrcodeInstance | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
 
   useEffect(() => {
     let mounted = true;
+    let startPromise: Promise<unknown> | null = null;
+
+    const stopAndClean = (scanner: Html5QrcodeInstance) => {
+      const state = scanner.getState();
+      if (state === 2 /* SCANNING */ || state === 1 /* STARTING */) {
+        scanner
+          .stop()
+          .then(() => {
+            try {
+              scanner.clear();
+            } catch {
+              // ignore
+            }
+          })
+          .catch(() => {
+            try {
+              scanner.clear();
+            } catch {
+              // ignore
+            }
+          });
+      } else {
+        try {
+          scanner.clear();
+        } catch {
+          // ignore
+        }
+      }
+    };
 
     const startScanner = async () => {
       if (!scannerRef.current) return;
@@ -269,7 +301,7 @@ function QRScannerTab({
         const scanner = new Html5Qrcode('qr-scanner-viewfinder');
         html5ScannerRef.current = scanner;
 
-        await scanner.start(
+        startPromise = scanner.start(
           { facingMode: 'environment' },
           { fps: 10, qrbox: { width: 220, height: 220 } },
           (decodedText: string) => {
@@ -279,7 +311,13 @@ function QRScannerTab({
           () => {}
         );
 
-        if (mounted) setScanning(true);
+        await startPromise;
+
+        if (mounted) {
+          setScanning(true);
+        } else {
+          stopAndClean(scanner);
+        }
       } catch (err) {
         if (mounted) {
           setCameraError('Camera access denied or unavailable');
@@ -292,13 +330,26 @@ function QRScannerTab({
 
     return () => {
       mounted = false;
-      if (html5ScannerRef.current) {
-        html5ScannerRef.current
-          .stop()
-          .then(() => html5ScannerRef.current?.clear())
-          .catch(() => {});
-        html5ScannerRef.current = null;
+      if (startPromise) {
+        startPromise
+          .then(() => {
+            if (html5ScannerRef.current) {
+              stopAndClean(html5ScannerRef.current);
+            }
+          })
+          .catch(() => {
+            if (html5ScannerRef.current) {
+              try {
+                html5ScannerRef.current.clear();
+              } catch {
+                // ignore
+              }
+            }
+          });
+      } else if (html5ScannerRef.current) {
+        stopAndClean(html5ScannerRef.current);
       }
+      html5ScannerRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

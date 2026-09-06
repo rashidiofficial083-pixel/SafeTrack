@@ -6,13 +6,14 @@ export interface TileLayerConfig {
   url: string;
   attribution: string;
   maxZoom?: number;
+  subdomains?: string[];
 }
 
 export const STREET_LAYER: TileLayerConfig = {
-  url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
-  attribution:
-    'Tiles &copy; Esri — Source: Esri, HERE, Garmin, USGS, Intermap, INCREMENT P, NRCan, Esri Japan, METI, Esri China (Hong Kong), Esri Korea, Esri (Thailand), NGCC, &copy; OpenStreetMap contributors, and the GIS User Community',
+  url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+  attribution: '&copy; OpenStreetMap contributors',
   maxZoom: 19,
+  subdomains: ['a', 'b', 'c'],
 };
 
 export const SATELLITE_LAYER: TileLayerConfig = {
@@ -39,7 +40,8 @@ const tileAttribution = STREET_LAYER.attribution;
 
 export const tileLayer = L.tileLayer(tileUrl, {
   attribution: tileAttribution,
-  maxZoom: 20,
+  maxZoom: 19,
+  subdomains: STREET_LAYER.subdomains,
 });
 
 export { tileUrl, tileAttribution };

@@ -271,6 +271,7 @@ function TileLayerSwitcher({ activeLayer }: { activeLayer: MapLayerType }) {
       const layer = L.tileLayer(STREET_LAYER.url, {
         attribution: STREET_LAYER.attribution,
         maxZoom: STREET_LAYER.maxZoom,
+        subdomains: STREET_LAYER.subdomains ?? ['abc'],
       }).addTo(map);
       tileLayersRef.current.push(layer);
     } else if (activeLayer === 'satellite') {
@@ -357,7 +358,7 @@ export function HistoryMap({ points, mapRef }: HistoryMapProps) {
       className="w-full h-full"
     >
       <MapEventSetup onMove={() => {}} mapRef={mapRef} />
-      <TileLayer url={tileUrl} attribution={tileAttribution} />
+      <TileLayer url={tileUrl} attribution={tileAttribution} subdomains={STREET_LAYER.subdomains ?? ['abc']} />
       {latlngs.length >= 2 && (
         <Polyline
           positions={latlngs}
