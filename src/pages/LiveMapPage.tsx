@@ -107,6 +107,7 @@ export function LiveMapPage() {
     hasLocation && !live && Date.now() / 1000 - location!.updatedAt > OFFLINE_THRESHOLD_SECONDS;
 
   const hasBattery =
+    hasLocation &&
     location!.batteryLevel !== null &&
     location!.batteryLevel !== undefined;
 

@@ -3,10 +3,9 @@ import { MapContainer, TileLayer, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { Plus, Minus } from 'lucide-react';
 
-const ESRI_STREET_URL =
-  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}';
-const ESRI_STREET_ATTRIBUTION =
-  'Tiles &copy; Esri — Source: Esri, HERE, Garmin, USGS, Intermap, INCREMENT P, NRCan, Esri Japan, METI, Esri China (Hong Kong), Esri Korea, Esri (Thailand), NGCC, &copy; OpenStreetMap contributors, and the GIS User Community';
+const OSM_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+const OSM_ATTRIBUTION = '&copy; OpenStreetMap contributors';
+const OSM_SUBDOMAINS = ['a', 'b', 'c'];
 
 const DEFAULT_CENTER: [number, number] = [23.8103, 90.4125];
 const DEFAULT_ZOOM = 12;
@@ -44,11 +43,16 @@ export function BrowsableMap({ mapRef }: BrowsableMapProps) {
         className="w-full h-full"
       >
         <MapController mapRef={mapRef} />
-        <TileLayer url={ESRI_STREET_URL} attribution={ESRI_STREET_ATTRIBUTION} maxZoom={19} />
+        <TileLayer
+          url={OSM_URL}
+          attribution={OSM_ATTRIBUTION}
+          subdomains={OSM_SUBDOMAINS}
+          maxZoom={19}
+        />
       </MapContainer>
 
       {/* Custom zoom controls — bottom right, styled to match app dark theme */}
-      <div className="absolute right-3 z-[500] flex flex-col gap-2" style={{ bottom: '88px' }}>
+      <div className="absolute right-3 z-40 flex flex-col gap-2" style={{ bottom: '88px' }}>
         <button
           onClick={() => {
             const map = (window as any).__homeMap as L.Map | undefined;

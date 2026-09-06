@@ -5,7 +5,7 @@ import {
 } from '@/lib/firestore';
 import type { UserLocation } from '@/types';
 
-type LocationStatus = 'idle' | 'sharing' | 'denied' | 'error' | 'unsupported';
+type LocationStatus = 'idle' | 'sharing' | 'denied' | 'blocked' | 'error' | 'unsupported';
 
 interface UseLocationSharingResult {
   status: LocationStatus;
@@ -236,7 +236,20 @@ export function useLocationSharing(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uid]);
 
-  const retry = () => {
+  const retry = async () => {
+    if ('permissions' in navigator) {
+      try {
+        const result = await navigator.permissions.query({
+          name: 'geolocation' as PermissionName,
+        });
+        if (result.state === 'denied') {
+          setStatus('blocked');
+          return;
+        }
+      } catch {
+        // Permissions API not supported — fall through to retry
+      }
+    }
     lastWriteRef.current = 0;
     startWatch();
   };

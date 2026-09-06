@@ -26,8 +26,8 @@ export function HomePage() {
       {/* Full-bleed browsable map */}
       <BrowsableMap mapRef={handleMapRef} />
 
-      {/* Floating widgets overlay */}
-      <div className="absolute inset-0 z-[400] pointer-events-none flex flex-col">
+      {/* Floating widgets overlay — below bottom nav (z-50) */}
+      <div className="absolute inset-0 z-40 pointer-events-none flex flex-col pb-16">
         {/* Top: search bar */}
         <div className="px-4 pt-5 pointer-events-auto">
           <MapSearchBar mapRef={mapRef} />

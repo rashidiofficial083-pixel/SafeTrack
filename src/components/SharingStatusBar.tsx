@@ -1,7 +1,7 @@
 import { MapPinOff, RefreshCw } from 'lucide-react';
 
 interface SharingStatusBarProps {
-  status: 'idle' | 'sharing' | 'denied' | 'error' | 'unsupported';
+  status: 'idle' | 'sharing' | 'denied' | 'blocked' | 'error' | 'unsupported';
   accuracy: number | null;
   onRetry: () => void;
 }
@@ -28,6 +28,24 @@ export function SharingStatusBar({
             ±{Math.round(accuracy)}m
           </span>
         )}
+      </div>
+    );
+  }
+
+  if (status === 'blocked') {
+    return (
+      <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl bg-red-500/15 backdrop-blur-md border border-red-500/30 shadow-lg">
+        <MapPinOff className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
+        <span className="text-[12px] text-red-300 font-medium flex-1">
+          Location was blocked. Please enable it manually in your browser's site settings for this page, then reload.
+        </span>
+        <button
+          onClick={onRetry}
+          className="flex items-center gap-1 text-[12px] text-accent font-medium hover:text-accent-muted transition-colors flex-shrink-0 mt-0.5"
+        >
+          <RefreshCw className="w-3.5 h-3.5" />
+          Retry
+        </button>
       </div>
     );
   }
