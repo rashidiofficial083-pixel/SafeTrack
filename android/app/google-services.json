@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "406687971030-o50kmhvghbkieg6g3u2a9hclfjefq0lb.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.safetrack.app",
+            "certificate_hash": "49242db94f636c1348214d693afc346e36d85f5d"
+          }
+        },
+        {
           "client_id": "406687971030-tchi81q1nd9euqkci2df5t69sd8lkujd.apps.googleusercontent.com",
           "client_type": 3
         }
