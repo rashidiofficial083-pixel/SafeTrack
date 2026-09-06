@@ -2,6 +2,7 @@ import {
   collection,
   doc,
   getDoc,
+  getDocFromServer,
   getDocs,
   query,
   where,
@@ -217,7 +218,7 @@ export async function isCurrentlyTracking(
   fromUid: string,
   targetUid: string
 ): Promise<boolean> {
-  const privSnap = await getDoc(privateDocRef(fromUid));
+  const privSnap = await getDocFromServer(privateDocRef(fromUid));
   if (!privSnap.exists()) return false;
   const trackingUids: string[] = privSnap.data().trackingUids ?? [];
   return trackingUids.includes(targetUid);
@@ -305,20 +306,26 @@ export async function stopTracking(
     trackedByUids: arrayRemove(currentUid),
   });
 
-  const q = query(
-    collection(db, 'pairingRequests'),
-    where('fromUid', '==', currentUid),
-    where('toUid', '==', targetUid),
-    where('status', '==', 'approved')
-  );
-  const snapshot = await getDocs(q);
-  snapshot.docs.forEach((d) => {
-    batch.update(doc(db, 'pairingRequests', d.id), {
-      status: 'revoked',
-    });
-  });
-
   await batch.commit();
+
+  try {
+    const q = query(
+      collection(db, 'pairingRequests'),
+      where('fromUid', '==', currentUid),
+      where('toUid', '==', targetUid),
+      where('status', '==', 'approved')
+    );
+    const snapshot = await getDocs(q);
+    const revokeBatch = writeBatch(db);
+    snapshot.docs.forEach((d) => {
+      revokeBatch.update(doc(db, 'pairingRequests', d.id), {
+        status: 'revoked',
+      });
+    });
+    await revokeBatch.commit();
+  } catch {
+    // Revocation is best-effort — the tracking arrays are already updated.
+  }
 }
 
 export async function fetchPublicUserProfiles(uids: string[]): Promise<PublicUser[]> {
