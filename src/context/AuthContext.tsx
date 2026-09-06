@@ -14,7 +14,7 @@ import {
   type User,
 } from 'firebase/auth';
 import { Capacitor } from '@capacitor/core';
-import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
+import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
 import { auth, googleProvider } from '@/lib/firebase';
 import { ensureUserDoc } from '@/lib/firestore';
 import { toAppUser, type AppUser } from '@/types';
@@ -33,10 +33,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (Capacitor.getPlatform() !== 'web') {
-      GoogleAuth.initialize();
-    }
-
     const unsubscribe = onAuthStateChanged(auth, async (fbUser: User | null) => {
       if (fbUser) {
         const appUser = toAppUser(fbUser);
@@ -55,9 +51,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signIn = async () => {
-    if (Capacitor.getPlatform() !== 'web') {
-      const result = await GoogleAuth.signIn();
-      const idToken = result.authentication?.idToken;
+    if (Capacitor.isNativePlatform()) {
+      const result = await FirebaseAuthentication.signInWithGoogle();
+      const idToken = result.credential?.idToken;
       if (!idToken) throw new Error('Google Sign-In failed: no ID token returned');
       const credential = GoogleAuthProvider.credential(idToken);
       await signInWithCredential(auth, credential);
@@ -67,9 +63,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    if (Capacitor.getPlatform() !== 'web') {
+    if (Capacitor.isNativePlatform()) {
       try {
-        await GoogleAuth.signOut();
+        await FirebaseAuthentication.signOut();
       } catch {
         // Best-effort — Firebase sign-out is the critical part
       }
