@@ -5,9 +5,10 @@ const config: CapacitorConfig = {
   appName: 'SafeTrack',
   webDir: 'dist',
   plugins: {
-    FirebaseAuthentication: {
-      skipNativeAuth: false,
-      providers: ['google.com'],
+    GoogleAuth: {
+      scopes: ['profile', 'email'],
+      serverClientId: '406687971030-tchi81q1nd9euqkci2df5t69sd8lkujd.apps.googleusercontent.com',
+      forceCodeForRefreshToken: true,
     },
   },
 };
