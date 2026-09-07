@@ -14,10 +14,13 @@ import {
   type User,
 } from 'firebase/auth';
 import { Capacitor } from '@capacitor/core';
-import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
+import { SocialLogin } from '@capgo/capacitor-social-login';
 import { auth, googleProvider } from '@/lib/firebase';
 import { ensureUserDoc } from '@/lib/firestore';
 import { toAppUser, type AppUser } from '@/types';
+
+const GOOGLE_WEB_CLIENT_ID =
+  '406687971030-tchi81q1nd9euqkci2df5t69sd8lkujd.apps.googleusercontent.com';
 
 interface AuthContextValue {
   user: AppUser | null;
@@ -34,7 +37,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (Capacitor.isNativePlatform()) {
-      GoogleAuth.initialize();
+      SocialLogin.initialize({
+        google: {
+          webClientId: GOOGLE_WEB_CLIENT_ID,
+        },
+      });
     }
   }, []);
 
@@ -59,16 +66,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signIn = async () => {
     if (Capacitor.isNativePlatform()) {
       try {
-        const googleUser = await GoogleAuth.signIn();
-        const idToken = googleUser.authentication?.idToken;
-        console.log('[Auth] GoogleAuth.signIn() result:', {
+        const loginResult = await SocialLogin.login({
+          provider: 'google',
+          options: { scopes: ['profile', 'email'] },
+        });
+        const googleResult = loginResult.result;
+        const idToken =
+          googleResult.responseType === 'online' ? googleResult.idToken : null;
+        console.log('[Auth] SocialLogin.login() result:', {
           hasIdToken: !!idToken,
           idTokenType: typeof idToken,
           idTokenLength: idToken?.length ?? 0,
-          email: googleUser.email ?? null,
+          responseType: googleResult.responseType,
         });
         if (!idToken) {
-          throw new Error('Google Sign-In failed: no ID token returned. Make sure the serverClientId in capacitor.config.ts matches a valid Web Client ID in the Google Cloud Console.');
+          throw new Error('Google Sign-In failed: no ID token returned. Make sure the webClientId in capacitor.config.ts matches a valid Web Client ID in the Google Cloud Console.');
         }
         const credential = GoogleAuthProvider.credential(idToken, null);
         await signInWithCredential(auth, credential);
@@ -85,7 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     if (Capacitor.isNativePlatform()) {
       try {
-        await GoogleAuth.signOut();
+        await SocialLogin.logout({ provider: 'google' });
       } catch {
         // Best-effort — Firebase sign-out is the critical part
       }
