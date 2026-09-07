@@ -6,9 +6,7 @@ import {
   type ReactNode,
 } from 'react';
 import {
-  GoogleAuthProvider,
   onAuthStateChanged,
-  signInWithCredential,
   signInWithPopup,
   signOut as firebaseSignOut,
   type User,
@@ -54,10 +52,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (Capacitor.isNativePlatform()) {
       try {
         const result = await FirebaseAuthentication.signInWithGoogle();
-        const idToken = result.credential?.idToken;
-        if (!idToken) throw new Error('Google Sign-In failed: no ID token returned');
-        const credential = GoogleAuthProvider.credential(idToken);
-        await signInWithCredential(auth, credential);
+        console.log('[Auth] Native sign-in result:', {
+          userUid: result.user?.uid ?? null,
+          userEmail: result.user?.email ?? null,
+          hasCredential: !!result.credential,
+          credentialProviderId: result.credential?.providerId ?? null,
+          hasIdToken: !!result.credential?.idToken,
+          idTokenType: typeof result.credential?.idToken,
+        });
+        if (!result.user?.uid) {
+          throw new Error('Google Sign-In failed: no user returned from native sign-in');
+        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error('[Auth] Native Google Sign-In failed:', msg, err);
