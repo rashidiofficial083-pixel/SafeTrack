@@ -21,6 +21,8 @@ import { Avatar } from '@/components/Avatar';
 import { LiveMap } from '@/components/LiveMapMarker';
 import { LayerSwitcher } from '@/components/LayerSwitcher';
 import { subscribeToUser } from '@/lib/firestore';
+import { useContactOverrides } from '@/hooks/useContactOverrides';
+import { useAuth } from '@/context/AuthContext';
 import { getInitials, timeAgo, isLive } from '@/lib/utils';
 import type { MapLayerType } from '@/lib/mapTiles';
 import type { UserProfile } from '@/types';
@@ -45,6 +47,7 @@ function formatSpeed(speed: number | null | undefined): string {
 export function LiveMapPage() {
   const { uid } = useParams<{ uid: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [autoRecenter, setAutoRecenter] = useState(true);
@@ -52,6 +55,7 @@ export function LiveMapPage() {
   const [refreshKey, setRefreshKey] = useState(0);
   const mapRef = useRef<L.Map | null>(null);
   const [, setTick] = useState(0);
+  const { getDisplayName } = useContactOverrides(user?.uid ?? null);
 
   useEffect(() => {
     if (!uid) return;
@@ -132,7 +136,7 @@ export function LiveMapPage() {
               <MapPinOff className="w-8 h-8 text-gray-500" />
             </div>
             <p className="text-sm text-gray-400 text-center">
-              Waiting for {profile?.displayName ?? 'this person'} to share their location
+              Waiting for {uid ? getDisplayName(uid, profile?.displayName) : 'this person'} to share their location
             </p>
           </div>
         </div>
@@ -145,7 +149,7 @@ export function LiveMapPage() {
             heading={location!.heading}
             isMoving={(location!.speed ?? 0) > 0.5}
             photoURL={profile?.photoURL || null}
-            initials={getInitials(profile?.displayName ?? null)}
+            initials={getInitials(uid ? getDisplayName(uid, profile?.displayName ?? null) : profile?.displayName ?? null)}
             isOffline={isOffline}
             autoRecenter={autoRecenter}
             onMapMove={handleMapMove}
@@ -199,7 +203,7 @@ export function LiveMapPage() {
                   <div className="rounded-full" style={{ border: '2px solid #2DD4BF' }}>
                     <Avatar
                       photoURL={profile?.photoURL || null}
-                      initials={getInitials(profile?.displayName ?? null)}
+                      initials={getInitials(uid ? getDisplayName(uid, profile?.displayName ?? null) : profile?.displayName ?? null)}
                       size="md"
                     />
                   </div>
@@ -212,7 +216,7 @@ export function LiveMapPage() {
 
                 <div className="flex-1 min-w-0">
                   <p className="text-[15px] font-bold text-gray-100 truncate">
-                    {profile?.displayName ?? 'Unknown'}
+                    {uid ? getDisplayName(uid, profile?.displayName) : (profile?.displayName ?? 'Unknown')}
                   </p>
                   {live ? (
                     <div className="flex items-center gap-1.5 mt-0.5">

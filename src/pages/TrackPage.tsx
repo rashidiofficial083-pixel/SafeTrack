@@ -1,10 +1,12 @@
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, Users, MapPinOff, MoreVertical, UserMinus, Loader2 } from 'lucide-react';
+import { ChevronRight, Users, MapPinOff, MoreVertical, UserMinus, Loader2, Pencil } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { Avatar } from '@/components/Avatar';
 import { BottomNav } from '@/components/BottomNav';
+import { NicknameSheet } from '@/components/NicknameSheet';
 import { subscribeToUserProfile, subscribeToTrackedUsers, stopTracking } from '@/lib/firestore';
+import { useContactOverrides } from '@/hooks/useContactOverrides';
 import { getInitials, timeAgo, isLive } from '@/lib/utils';
 import type { UserProfile } from '@/types';
 
@@ -17,7 +19,10 @@ export function TrackPage() {
   const [menuOpenUid, setMenuOpenUid] = useState<string | null>(null);
   const [confirmStop, setConfirmStop] = useState<UserProfile | null>(null);
   const [stopping, setStopping] = useState(false);
+  const [nicknameTarget, setNicknameTarget] = useState<UserProfile | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
+
+  const { overrides, getDisplayName } = useContactOverrides(user?.uid ?? null);
 
   useEffect(() => {
     if (!user) return;
@@ -103,6 +108,9 @@ export function TrackPage() {
               const live = hasLocation && isLive(p.location!.updatedAt);
               const location = p.location;
               const menuOpen = menuOpenUid === p.uid;
+              const displayName = getDisplayName(p.uid, p.displayName);
+              const hasNickname = !!overrides[p.uid]?.nickname?.trim();
+
               return (
                 <div
                   key={p.uid}
@@ -118,9 +126,14 @@ export function TrackPage() {
                       size="md"
                     />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-                        {p.displayName}
-                      </p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                          {displayName}
+                        </p>
+                        {hasNickname && (
+                          <Pencil className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                        )}
+                      </div>
                       {hasLocation ? (
                         <div className="flex items-center gap-1.5 mt-0.5">
                           {live && (
@@ -165,8 +178,18 @@ export function TrackPage() {
                   {menuOpen && (
                     <div
                       ref={menuRef}
-                      className="absolute right-2 top-12 z-50 w-44 py-1 rounded-lg border border-gray-200 dark:border-gray-700/50 bg-white dark:bg-[#252a31] shadow-lg"
+                      className="absolute right-2 top-12 z-50 w-48 py-1 rounded-lg border border-gray-200 dark:border-gray-700/50 bg-white dark:bg-[#252a31] shadow-lg"
                     >
+                      <button
+                        onClick={() => {
+                          setNicknameTarget(p);
+                          setMenuOpenUid(null);
+                        }}
+                        className="flex items-center gap-2.5 w-full px-3 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800"
+                      >
+                        <Pencil className="w-4 h-4" />
+                        {hasNickname ? 'Edit nickname' : 'Set nickname'}
+                      </button>
                       <button
                         onClick={() => {
                           setConfirmStop(p);
@@ -202,7 +225,7 @@ export function TrackPage() {
               />
               <div>
                 <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                  Stop tracking {confirmStop.displayName}?
+                  Stop tracking {getDisplayName(confirmStop.uid, confirmStop.displayName)}?
                 </p>
                 <p className="text-[13px] text-gray-500 dark:text-gray-400 mt-0.5">
                   You'll need to send a new request to track them again.
@@ -222,15 +245,24 @@ export function TrackPage() {
                 disabled={stopping}
                 className="flex-1 h-11 rounded-lg bg-red-500 text-white text-sm font-medium hover:bg-red-600 disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                {stopping ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  'Stop tracking'
-                )}
+                {stopping ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Stop tracking'}
               </button>
             </div>
           </div>
         </div>
+      )}
+
+      {/* Nickname sheet */}
+      {user && nicknameTarget && (
+        <NicknameSheet
+          open={!!nicknameTarget}
+          onClose={() => setNicknameTarget(null)}
+          viewerUid={user.uid}
+          subjectUid={nicknameTarget.uid}
+          subjectDisplayName={nicknameTarget.displayName}
+          subjectPhotoURL={nicknameTarget.photoURL || null}
+          currentNickname={overrides[nicknameTarget.uid]?.nickname ?? ''}
+        />
       )}
 
       <BottomNav active="track" />

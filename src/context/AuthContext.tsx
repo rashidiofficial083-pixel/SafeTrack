@@ -7,10 +7,14 @@ import {
 } from 'react';
 import {
   GoogleAuthProvider,
+  createUserWithEmailAndPassword,
   onAuthStateChanged,
+  sendPasswordResetEmail,
   signInWithCredential,
+  signInWithEmailAndPassword,
   signInWithPopup,
   signOut as firebaseSignOut,
+  updateProfile,
   type User,
 } from 'firebase/auth';
 import { Capacitor } from '@capacitor/core';
@@ -25,7 +29,10 @@ const GOOGLE_WEB_CLIENT_ID =
 interface AuthContextValue {
   user: AppUser | null;
   loading: boolean;
-  signIn: () => Promise<void>;
+  signIn: (email: string, password: string) => Promise<void>;
+  signUp: (name: string, email: string, password: string) => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
+  sendPasswordReset: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -38,9 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (Capacitor.isNativePlatform()) {
       SocialLogin.initialize({
-        google: {
-          webClientId: GOOGLE_WEB_CLIENT_ID,
-        },
+        google: { webClientId: GOOGLE_WEB_CLIENT_ID },
       });
     }
   }, []);
@@ -63,35 +68,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return unsubscribe;
   }, []);
 
-  const signIn = async () => {
+  const signIn = async (email: string, password: string) => {
+    await signInWithEmailAndPassword(auth, email, password);
+  };
+
+  const signUp = async (name: string, email: string, password: string) => {
+    const { user: fbUser } = await createUserWithEmailAndPassword(auth, email, password);
+    await updateProfile(fbUser, { displayName: name });
+    // Re-read so ensureUserDoc gets the updated displayName
+    const appUser = toAppUser({ ...fbUser, displayName: name } as User);
+    await ensureUserDoc(appUser);
+    setUser(appUser);
+  };
+
+  const signInWithGoogle = async () => {
     if (Capacitor.isNativePlatform()) {
-      try {
-        const loginResult = await SocialLogin.login({
-          provider: 'google',
-          options: { scopes: ['profile', 'email'] },
-        });
-        const googleResult = loginResult.result;
-        const idToken =
-          googleResult.responseType === 'online' ? googleResult.idToken : null;
-        console.log('[Auth] SocialLogin.login() result:', {
-          hasIdToken: !!idToken,
-          idTokenType: typeof idToken,
-          idTokenLength: idToken?.length ?? 0,
-          responseType: googleResult.responseType,
-        });
-        if (!idToken) {
-          throw new Error('Google Sign-In failed: no ID token returned. Make sure the webClientId in capacitor.config.ts matches a valid Web Client ID in the Google Cloud Console.');
-        }
-        const credential = GoogleAuthProvider.credential(idToken, null);
-        await signInWithCredential(auth, credential);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error('[Auth] Native Google Sign-In failed:', msg, err);
-        throw new Error(`Sign-in failed: ${msg}`);
+      const loginResult = await SocialLogin.login({
+        provider: 'google',
+        options: { scopes: ['profile', 'email'] },
+      });
+      const googleResult = loginResult.result;
+      const idToken =
+        googleResult.responseType === 'online' ? googleResult.idToken : null;
+      if (!idToken) {
+        throw new Error('Google Sign-In failed: no ID token returned. Make sure the webClientId matches a valid Web Client ID in Google Cloud Console.');
       }
+      const credential = GoogleAuthProvider.credential(idToken, null);
+      await signInWithCredential(auth, credential);
     } else {
       await signInWithPopup(auth, googleProvider);
     }
+  };
+
+  const sendPasswordReset = async (email: string) => {
+    await sendPasswordResetEmail(auth, email);
   };
 
   const signOut = async () => {
@@ -106,7 +116,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, loading, signIn, signUp, signInWithGoogle, sendPasswordReset, signOut }}>
       {children}
     </AuthContext.Provider>
   );

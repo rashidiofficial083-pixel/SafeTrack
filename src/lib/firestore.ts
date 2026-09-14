@@ -469,3 +469,45 @@ export function subscribeToUser(
 ): Unsubscribe {
   return subscribeToUserProfile(uid, callback);
 }
+
+// ── Contact overrides ────────────────────────────────────────────────────────
+// Stored at users/{viewerUid}/contactOverrides/{subjectUid}
+// Completely private to the viewer — never exposed to the subject.
+
+export interface ContactOverride {
+  nickname?: string;
+}
+
+function overrideRef(viewerUid: string, subjectUid: string) {
+  return doc(db, 'users', viewerUid, 'contactOverrides', subjectUid);
+}
+
+export function subscribeToOverrides(
+  viewerUid: string,
+  callback: (overrides: Record<string, ContactOverride>) => void
+): Unsubscribe {
+  const colRef = collection(db, 'users', viewerUid, 'contactOverrides');
+  return onSnapshot(colRef, (snap) => {
+    const result: Record<string, ContactOverride> = {};
+    snap.docs.forEach((d) => {
+      result[d.id] = d.data() as ContactOverride;
+    });
+    callback(result);
+  });
+}
+
+export async function setContactOverride(
+  viewerUid: string,
+  subjectUid: string,
+  override: ContactOverride
+): Promise<void> {
+  await setDoc(overrideRef(viewerUid, subjectUid), override, { merge: true });
+}
+
+export async function clearContactOverride(
+  viewerUid: string,
+  subjectUid: string
+): Promise<void> {
+  const ref = overrideRef(viewerUid, subjectUid);
+  await setDoc(ref, {});
+}
