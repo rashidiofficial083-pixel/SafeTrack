@@ -41,7 +41,7 @@ export async function pickAndUploadProfilePhoto(
     if (Capacitor.isNativePlatform()) {
       const photo = await Camera.getPhoto({
         quality: 80,
-        allowEditing: true,
+        allowEditing: false,
         resultType: CameraResultType.DataUrl,
         source: CameraSource.Prompt,
         width: 512,
