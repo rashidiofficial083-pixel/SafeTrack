@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { Camera, User, Loader2, Check, AlertCircle } from 'lucide-react';
+import { Camera, User, Loader2, Check, AlertCircle, Upload } from 'lucide-react';
 import { BottomSheet } from '@/components/BottomSheet';
 import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { updateUserDisplayName, updateUserPhotoURL } from '@/lib/firestore';
-import { pickAndUploadProfilePhoto } from '@/lib/profilePhoto';
+import { pickAndUploadProfilePhoto, CloudinaryUploadError, type UploadStage } from '@/lib/profilePhoto';
 import { getInitials } from '@/lib/utils';
 
 interface EditProfileSheetProps {
@@ -15,6 +15,13 @@ interface EditProfileSheetProps {
   photoURL: string | null;
   onUpdated: () => void;
 }
+
+const STAGE_LABELS: Record<UploadStage, string> = {
+  idle: '',
+  preparing: 'Preparing image…',
+  uploading: 'Uploading to Cloudinary…',
+  done: 'Upload complete',
+};
 
 export function EditProfileSheet({
   open,
@@ -28,20 +35,35 @@ export function EditProfileSheet({
   const [photoUrl, setPhotoUrl] = useState(photoURL);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadStage, setUploadStage] = useState<UploadStage>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const handlePhoto = async () => {
     setError(null);
+    setUploadError(null);
     setUploading(true);
+    setUploadStage('idle');
     try {
-      const url = await pickAndUploadProfilePhoto();
+      const url = await pickAndUploadProfilePhoto((stage) => {
+        setUploadStage(stage);
+      });
       if (url) {
         setPhotoUrl(url);
       }
-    } catch {
-      setError('Failed to upload photo. Please try again.');
+    } catch (e) {
+      if (e instanceof CloudinaryUploadError) {
+        const parts: string[] = [`Upload failed at "${STAGE_LABELS[e.stage] || e.stage}" step.`];
+        if (e.message) parts.push(`Error: ${e.message}`);
+        if (e.statusCode !== null) parts.push(`HTTP status: ${e.statusCode}`);
+        if (e.responseBody) parts.push(`Cloudinary response: ${e.responseBody.slice(0, 400)}`);
+        setUploadError(parts.join('\n'));
+      } else {
+        setUploadError(`Unexpected error: ${e instanceof Error ? e.message : String(e)}`);
+      }
     } finally {
       setUploading(false);
+      setUploadStage('idle');
     }
   };
 
@@ -102,6 +124,20 @@ export function EditProfileSheet({
           >
             {uploading ? 'Uploading…' : 'Change photo'}
           </button>
+
+          {/* Live upload status */}
+          {uploading && uploadStage !== 'idle' && (
+            <div className="flex items-center gap-1.5 text-[11px] text-gray-500 dark:text-gray-400">
+              <Loader2 className="w-3 h-3 animate-spin" />
+              {STAGE_LABELS[uploadStage]}
+            </div>
+          )}
+          {!uploading && uploadStage === 'done' && (
+            <div className="flex items-center gap-1.5 text-[11px] text-success">
+              <Check className="w-3 h-3" />
+              {STAGE_LABELS.done}
+            </div>
+          )}
         </div>
 
         {/* Name input */}
@@ -117,10 +153,30 @@ export function EditProfileSheet({
           />
         </div>
 
+        {/* Generic error (name validation / save failure) */}
         {error && (
           <div className="flex items-center gap-2 text-[12px] text-red-500">
             <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
             {error}
+          </div>
+        )}
+
+        {/* Detailed upload error — full diagnostic info visible on screen */}
+        {uploadError && (
+          <div className="rounded-lg border border-red-500/40 bg-red-500/5 p-3">
+            <div className="flex items-start gap-2 mb-2">
+              <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+              <span className="text-[12px] font-semibold text-red-500">Photo upload failed</span>
+            </div>
+            <pre className="whitespace-pre-wrap break-words text-[11px] text-red-600 dark:text-red-400 font-mono leading-relaxed max-h-40 overflow-y-auto">
+{uploadError}
+            </pre>
+            <button
+              onClick={() => setUploadError(null)}
+              className="mt-2 text-[11px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            >
+              Dismiss
+            </button>
           </div>
         )}
 
