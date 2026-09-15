@@ -1,8 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
+import { updateLocation, addLocationHistoryEntry } from '@/lib/firestore';
 import {
-  updateLocation,
-  addLocationHistoryEntry,
-} from '@/lib/firestore';
+  createLocationWriter,
+  startBackgroundWatcher,
+  type LocationWriter,
+  type BackgroundWatcherHandle,
+} from '@/lib/backgroundGeolocation';
 import type { UserLocation } from '@/types';
 
 type LocationStatus = 'idle' | 'sharing' | 'denied' | 'blocked' | 'error' | 'unsupported';
@@ -33,12 +37,32 @@ function haversineMeters(
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+const BG_TRACKING_KEY = 'safetrack_bg_tracking_enabled';
+
+export function getBgTrackingPref(): boolean {
+  try {
+    return localStorage.getItem(BG_TRACKING_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+export function setBgTrackingPref(enabled: boolean) {
+  try {
+    localStorage.setItem(BG_TRACKING_KEY, enabled ? 'true' : 'false');
+  } catch {
+    // ignore
+  }
+}
+
 export function useLocationSharing(
   uid: string | null
 ): UseLocationSharingResult {
   const [status, setStatus] = useState<LocationStatus>('idle');
   const [accuracy, setAccuracy] = useState<number | null>(null);
   const watchIdRef = useRef<number | null>(null);
+  const bgWatcherRef = useRef<BackgroundWatcherHandle | null>(null);
+  const writerRef = useRef<LocationWriter | null>(null);
   const lastWriteRef = useRef<number>(0);
   const lastHistoryTimeRef = useRef<number>(0);
   const lastHistoryLatRef = useRef<number | null>(null);
@@ -74,7 +98,7 @@ export function useLocationSharing(
   const writeLocation = (
     latitude: number,
     longitude: number,
-    accuracy: number,
+    accuracyVal: number,
     heading: number | null,
     speed: number | null,
     isLastKnown = false
@@ -85,7 +109,7 @@ export function useLocationSharing(
     const location: UserLocation = {
       lat: latitude,
       lng: longitude,
-      accuracy,
+      accuracy: accuracyVal,
       heading,
       speed,
       updatedAt: Date.now() / 1000,
@@ -125,7 +149,7 @@ export function useLocationSharing(
         currentUid,
         latitude,
         longitude,
-        accuracy
+        accuracyVal
       ).catch((e) => console.error('Failed to write history:', e));
     }
   };
@@ -144,7 +168,7 @@ export function useLocationSharing(
 
     watchIdRef.current = navigator.geolocation.watchPosition(
       (position) => {
-        const { latitude, longitude, accuracy, heading, speed } =
+        const { latitude, longitude, accuracy: acc, heading, speed } =
           position.coords;
         const now = Date.now();
 
@@ -154,11 +178,11 @@ export function useLocationSharing(
         writeLocation(
           latitude,
           longitude,
-          accuracy,
+          acc,
           heading ?? null,
           speed ?? null
         );
-        setAccuracy(accuracy);
+        setAccuracy(acc);
       },
       (err) => {
         if (err.code === err.PERMISSION_DENIED) {
@@ -175,6 +199,30 @@ export function useLocationSharing(
     );
   };
 
+  const startBackgroundWatch = async () => {
+    if (!uidRef.current) return;
+    const writer = createLocationWriter(uidRef.current);
+    writerRef.current = writer;
+
+    // Sync battery level to writer
+    writer.setBatteryLevel(batteryLevelRef.current);
+
+    try {
+      const handle = await startBackgroundWatcher(
+        uidRef.current,
+        writer,
+        (s) => {
+          setStatus(s as LocationStatus);
+        }
+      );
+      bgWatcherRef.current = handle;
+      setStatus('sharing');
+    } catch (e) {
+      console.error('Failed to start background watcher, falling back to web geolocation:', e);
+      startWatch();
+    }
+  };
+
   useEffect(() => {
     if (!uid) {
       setStatus('idle');
@@ -184,7 +232,15 @@ export function useLocationSharing(
     lastHistoryTimeRef.current = 0;
     lastHistoryLatRef.current = null;
     lastHistoryLngRef.current = null;
-    startWatch();
+
+    const isNative = Capacitor.isNativePlatform();
+    const bgEnabled = getBgTrackingPref();
+
+    if (isNative && bgEnabled) {
+      startBackgroundWatch();
+    } else {
+      startWatch();
+    }
 
     const handleBeforeUnload = () => {
       if (lastHistoryLatRef.current !== null && lastHistoryLngRef.current !== null) {
@@ -229,6 +285,11 @@ export function useLocationSharing(
         navigator.geolocation.clearWatch(watchIdRef.current);
         watchIdRef.current = null;
       }
+      if (bgWatcherRef.current) {
+        bgWatcherRef.current.stop().catch(() => {});
+        bgWatcherRef.current = null;
+      }
+      writerRef.current = null;
       window.removeEventListener('beforeunload', handleBeforeUnload);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (visibilityTimeout) clearTimeout(visibilityTimeout);

@@ -3,14 +3,15 @@ import {
   Sun,
   Moon,
   LogOut,
-  Key,
   Copy,
   Check,
   QrCode,
   MapPinned,
-  ChevronDown,
-  Eye,
+  Pencil,
+  Power,
+  Loader2,
 } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { Avatar } from '@/components/Avatar';
@@ -22,7 +23,15 @@ import { TrackedByList } from '@/components/TrackedByList';
 import { TrackSomeoneSheet } from '@/components/TrackSomeoneSheet';
 import { QRCodeModal } from '@/components/QRCodeModal';
 import { SentRequests } from '@/components/SentRequests';
+import { EditProfileSheet } from '@/components/EditProfileSheet';
+import { BatteryOptimizationPrompt } from '@/components/BatteryOptimizationPrompt';
 import { subscribeToUserProfile } from '@/lib/firestore';
+import {
+  getBgTrackingPref,
+  setBgTrackingPref,
+} from '@/hooks/useLocationSharing';
+import { updateProfile as updateAuthProfile } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
 import type { UserProfile } from '@/types';
 
 export function ProfilePage() {
@@ -33,6 +42,9 @@ export function ProfilePage() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [bgTrackingEnabled, setBgTrackingEnabled] = useState(getBgTrackingPref());
+  const [showBatteryPrompt, setShowBatteryPrompt] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -47,6 +59,10 @@ export function ProfilePage() {
   const secretCode = profile?.secretCode ?? '';
   const trackedByUids = profile?.trackedByUids ?? [];
 
+  // Use profile data for display (reflects Firestore updates in real time)
+  const displayName = profile?.displayName ?? user?.displayName ?? 'User';
+  const photoURL = profile?.photoURL || user?.photoURL || null;
+
   const handleCopy = async () => {
     if (!secretCode) return;
     await navigator.clipboard.writeText(secretCode);
@@ -59,11 +75,40 @@ export function ProfilePage() {
     return status.charAt(0).toUpperCase() + status.slice(1);
   })();
 
+  const handleBgTrackingToggle = () => {
+    const newValue = !bgTrackingEnabled;
+    setBgTrackingEnabled(newValue);
+    setBgTrackingPref(newValue);
+    if (newValue && Capacitor.isNativePlatform()) {
+      setShowBatteryPrompt(true);
+    }
+  };
+
+  const handleProfileUpdated = async () => {
+    if (user && auth.currentUser) {
+      try {
+        await updateAuthProfile(auth.currentUser, {
+          displayName: profile?.displayName ?? user.displayName,
+          photoURL: profile?.photoURL ?? user.photoURL ?? undefined,
+        });
+      } catch {
+        // Best-effort — Firestore is the source of truth for display
+      }
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#0f1115] pb-20">
       <div className="px-5 pt-6 max-w-sm mx-auto">
-        {/* Theme toggle — top right */}
-        <div className="flex justify-end mb-4">
+        {/* Top row: theme toggle + edit */}
+        <div className="flex justify-between mb-4">
+          <button
+            onClick={() => setEditOpen(true)}
+            className="w-10 h-10 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            aria-label="Edit profile"
+          >
+            <Pencil className="w-5 h-5" />
+          </button>
           <button
             onClick={toggleTheme}
             className="w-10 h-10 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
@@ -79,15 +124,22 @@ export function ProfilePage() {
 
         {/* Header: avatar, name, email, subscription badge */}
         <div className="flex flex-col items-center gap-2 mb-6">
-          <Avatar
-            photoURL={user?.photoURL ?? null}
-            initials={user?.displayName
-              ? user.displayName.charAt(0).toUpperCase()
-              : '?'}
-            size="lg"
-          />
+          <div className="relative">
+            <Avatar
+              photoURL={photoURL}
+              initials={displayName.charAt(0).toUpperCase()}
+              size="lg"
+            />
+            <button
+              onClick={() => setEditOpen(true)}
+              className="absolute bottom-0 right-0 w-6 h-6 rounded-full bg-accent text-black flex items-center justify-center shadow-md hover:bg-accent-muted transition-colors"
+              aria-label="Edit profile"
+            >
+              <Pencil className="w-3 h-3" />
+            </button>
+          </div>
           <p className="text-[15px] font-bold text-gray-900 dark:text-gray-100 mt-1">
-            {user?.displayName ?? 'User'}
+            {displayName}
           </p>
           <p className="text-[11px] text-gray-500 dark:text-gray-400">
             {user?.email ?? ''}
@@ -98,7 +150,7 @@ export function ProfilePage() {
         </div>
 
         {/* Your code card */}
-        <Card className="p-4 flex items-center gap-3 mb-6">
+        <Card className="p-4 flex items-center gap-3 mb-4">
           <div className="flex-1 min-w-0">
             <span className="text-[13px] text-gray-500 dark:text-gray-400">
               Your code
@@ -132,6 +184,38 @@ export function ProfilePage() {
             </button>
           </div>
         </Card>
+
+        {/* Background tracking toggle (native only) */}
+        {Capacitor.isNativePlatform() && (
+          <Card className="p-4 flex items-center gap-3 mb-4">
+            <div className="w-9 h-9 rounded-lg bg-accent/15 flex items-center justify-center flex-shrink-0">
+              <Power className="w-4 h-4 text-accent" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-medium text-gray-900 dark:text-gray-100">
+                Background tracking
+              </p>
+              <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                Keep sharing when screen is locked
+              </p>
+            </div>
+            <button
+              onClick={handleBgTrackingToggle}
+              className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${
+                bgTrackingEnabled
+                  ? 'bg-accent'
+                  : 'bg-gray-300 dark:bg-gray-600'
+              }`}
+              aria-label="Toggle background tracking"
+            >
+              <span
+                className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                  bgTrackingEnabled ? 'translate-x-5' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+          </Card>
+        )}
 
         {/* Pending requests (incoming) */}
         <IncomingRequests />
@@ -176,6 +260,23 @@ export function ProfilePage() {
         onClose={() => setQrOpen(false)}
         code={secretCode}
       />
+
+      {user && (
+        <EditProfileSheet
+          open={editOpen}
+          onClose={() => setEditOpen(false)}
+          uid={user.uid}
+          displayName={displayName}
+          photoURL={photoURL}
+          onUpdated={handleProfileUpdated}
+        />
+      )}
+
+      {showBatteryPrompt && (
+        <BatteryOptimizationPrompt
+          onDismiss={() => setShowBatteryPrompt(false)}
+        />
+      )}
     </div>
   );
 }

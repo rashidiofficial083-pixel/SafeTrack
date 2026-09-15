@@ -511,3 +511,13 @@ export async function clearContactOverride(
   const ref = overrideRef(viewerUid, subjectUid);
   await setDoc(ref, {});
 }
+
+// ── Profile updates ───────────────────────────────────────────────────────────
+
+export async function updateUserDisplayName(uid: string, displayName: string): Promise<void> {
+  await updateDoc(doc(db, 'users', uid), { displayName });
+}
+
+export async function updateUserPhotoURL(uid: string, photoURL: string): Promise<void> {
+  await updateDoc(doc(db, 'users', uid), { photoURL });
+}
