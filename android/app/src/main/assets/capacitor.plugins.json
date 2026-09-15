@@ -1,5 +1,13 @@
 [
 	{
+		"pkg": "@capacitor-community/background-geolocation",
+		"classpath": "com.equimaps.capacitor_background_geolocation.BackgroundGeolocation"
+	},
+	{
+		"pkg": "@capacitor/camera",
+		"classpath": "com.capacitorjs.plugins.camera.CameraPlugin"
+	},
+	{
 		"pkg": "@capgo/capacitor-social-login",
 		"classpath": "ee.forgr.capacitor.social.login.SocialLoginPlugin"
 	}
