@@ -1,23 +1,18 @@
 import { Capacitor } from '@capacitor/core';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
-import {
-  getStorage,
-  ref,
-  uploadBytes,
-  getDownloadURL,
-} from 'firebase/storage';
-import { getApps, initializeApp } from 'firebase/app';
 
-const app = getApps().length > 0 ? getApps()[0] : initializeApp({
-  apiKey: "AIzaSyBnFWolAfZPz2D0AxpkGFKJXAmphJ__lz4",
-  authDomain: "safe-track-4d2e1.firebaseapp.com",
-  projectId: "safe-track-4d2e1",
-  storageBucket: "safe-track-4d2e1.firebasestorage.app",
-  messagingSenderId: "406687971030",
-  appId: "1:406687971030:web:b59c6ecb24319595d9fb77"
-});
+const CLOUD_NAME = 'lq7o71nu';
+const UPLOAD_PRESET = 'safetrack_profile';
+const UPLOAD_URL = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`;
 
-export async function pickAndUploadProfilePhoto(uid: string): Promise<string | null> {
+interface CloudinaryResponse {
+  secure_url: string;
+  public_id: string;
+  width: number;
+  height: number;
+}
+
+export async function pickAndUploadProfilePhoto(): Promise<string | null> {
   let photoDataUrl: string | null = null;
 
   if (Capacitor.isNativePlatform()) {
@@ -32,28 +27,25 @@ export async function pickAndUploadProfilePhoto(uid: string): Promise<string | n
     if (!photo.dataUrl) return null;
     photoDataUrl = photo.dataUrl as string;
   } else {
-    // Web fallback: use file input
     photoDataUrl = await pickPhotoWeb();
     if (!photoDataUrl) return null;
   }
 
-  const storage = getStorage(app);
-  const storageRef = ref(storage, `users/${uid}/profile.jpg`);
-  const blob = dataUrlToBlob(photoDataUrl);
-  await uploadBytes(storageRef, blob, { contentType: 'image/jpeg' });
-  const downloadUrl = await getDownloadURL(storageRef);
-  return downloadUrl;
-}
+  const formData = new FormData();
+  formData.append('file', photoDataUrl);
+  formData.append('upload_preset', UPLOAD_PRESET);
 
-function dataUrlToBlob(dataUrl: string): Blob {
-  const [meta, base64] = dataUrl.split(',');
-  const mime = meta.match(/data:(.*?);/)?.[1] ?? 'image/jpeg';
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
+  const response = await fetch(UPLOAD_URL, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Cloudinary upload failed: ${response.status}`);
   }
-  return new Blob([bytes], { type: mime });
+
+  const data = (await response.json()) as CloudinaryResponse;
+  return data.secure_url;
 }
 
 function pickPhotoWeb(): Promise<string | null> {

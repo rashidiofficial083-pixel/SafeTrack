@@ -34,7 +34,7 @@ export function EditProfileSheet({
     setError(null);
     setUploading(true);
     try {
-      const url = await pickAndUploadProfilePhoto(uid);
+      const url = await pickAndUploadProfilePhoto();
       if (url) {
         setPhotoUrl(url);
       }
