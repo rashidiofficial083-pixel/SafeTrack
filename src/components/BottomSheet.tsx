@@ -47,7 +47,7 @@ export function BottomSheet({ open, onClose, title, children }: BottomSheetProps
             <X className="w-5 h-5" />
           </button>
         </div>
-        <div className="px-5 pb-6 pt-2 max-h-[80vh] overflow-y-auto">{children}</div>
+        <div className="px-5 pb-6 pt-2 max-h-[80dvh] overflow-y-auto">{children}</div>
       </div>
     </div>
   );

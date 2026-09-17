@@ -3,12 +3,25 @@ import { Geolocation } from '@capacitor/geolocation';
 
 export type LocationServicesState = 'enabled' | 'disabled' | 'unknown';
 
+export async function requestLocationPermissions(): Promise<'granted' | 'denied' | 'gps_off'> {
+  if (!Capacitor.isNativePlatform()) return 'granted';
+
+  try {
+    const status = await Geolocation.requestPermissions();
+    if (status.location === 'granted') return 'granted';
+    return 'denied';
+  } catch {
+    return 'gps_off';
+  }
+}
+
 export async function isLocationServicesEnabled(): Promise<LocationServicesState> {
   if (!Capacitor.isNativePlatform()) return 'enabled';
 
   try {
-    await Geolocation.checkPermissions();
-    return 'enabled';
+    const status = await Geolocation.checkPermissions();
+    if (status.location === 'granted') return 'enabled';
+    return 'unknown';
   } catch {
     return 'disabled';
   }

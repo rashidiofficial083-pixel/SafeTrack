@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { useEffect } from 'react';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { ThemeProvider } from '@/context/ThemeContext';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
@@ -10,9 +11,14 @@ import { TrackPage } from '@/pages/TrackPage';
 import { LiveMapPage } from '@/pages/LiveMapPage';
 import { HistoryPage } from '@/pages/HistoryPage';
 import { ProfilePage } from '@/pages/ProfilePage';
+import { requestNativePermissions } from '@/lib/nativePermissions';
 
 function AppRoutes() {
   const { loading } = useAuth();
+
+  useEffect(() => {
+    requestNativePermissions();
+  }, []);
 
   if (loading) return <LoadingSpinner />;
 

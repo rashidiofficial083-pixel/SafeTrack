@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Loader2, Pencil, X } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Loader2, Pencil, X, Check } from 'lucide-react';
 import { BottomSheet } from '@/components/BottomSheet';
 import { Avatar } from '@/components/Avatar';
 import { setContactOverride, clearContactOverride } from '@/lib/firestore';
@@ -27,12 +27,13 @@ export function NicknameSheet({
   const [value, setValue] = useState(currentNickname);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
-  // Sync when sheet opens or current nickname changes
   useEffect(() => {
     if (open) {
       setValue(currentNickname);
       setError(null);
+      setTimeout(() => inputRef.current?.focus(), 300);
     }
   }, [open, currentNickname]);
 
@@ -71,8 +72,13 @@ export function NicknameSheet({
 
   return (
     <BottomSheet open={open} onClose={onClose} title="Set nickname">
-      <div className="flex flex-col gap-4">
-        {/* Person identity */}
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          handleSave();
+        }}
+        className="flex flex-col gap-4"
+      >
         <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 dark:bg-[#0f1115]">
           <Avatar
             photoURL={subjectPhotoURL}
@@ -89,16 +95,17 @@ export function NicknameSheet({
           </div>
         </div>
 
-        {/* Nickname input */}
         <div className="relative">
           <Pencil className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
           <input
+            ref={inputRef}
             type="text"
             placeholder="Enter a nickname…"
             value={value}
             maxLength={40}
+            enterKeyHint="done"
             onChange={(e) => { setValue(e.target.value); setError(null); }}
-            className="w-full h-11 pl-9 pr-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#1a1d23] text-[14px] text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+            className="w-full h-11 pl-9 pr-10 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#1a1d23] text-[14px] text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
           />
           {value && (
             <button
@@ -115,9 +122,10 @@ export function NicknameSheet({
           <p className="text-[12px] text-red-500 -mt-2">{error}</p>
         )}
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 pb-[env(safe-area-inset-bottom)]">
           {currentNickname && (
             <button
+              type="button"
               onClick={handleRemove}
               disabled={saving}
               className="h-11 px-4 rounded-xl border border-gray-300 dark:border-gray-700 text-[13px] font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50 transition-colors"
@@ -126,14 +134,21 @@ export function NicknameSheet({
             </button>
           )}
           <button
-            onClick={handleSave}
+            type="submit"
             disabled={saving}
             className="flex-1 h-11 flex items-center justify-center gap-2 rounded-xl bg-accent text-black text-[14px] font-semibold hover:bg-accent-muted disabled:opacity-60 transition-colors"
           >
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save'}
+            {saving ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <>
+                <Check className="w-4 h-4" />
+                Save
+              </>
+            )}
           </button>
         </div>
-      </div>
+      </form>
     </BottomSheet>
   );
 }

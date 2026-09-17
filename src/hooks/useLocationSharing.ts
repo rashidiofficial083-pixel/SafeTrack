@@ -7,7 +7,7 @@ import {
   type LocationWriter,
   type BackgroundWatcherHandle,
 } from '@/lib/backgroundGeolocation';
-import { isLocationServicesEnabled } from '@/lib/locationServices';
+import { isLocationServicesEnabled, requestLocationPermissions } from '@/lib/locationServices';
 import type { UserLocation } from '@/types';
 
 type LocationStatus =
@@ -239,8 +239,12 @@ export function useLocationSharing(
     const isNative = Capacitor.isNativePlatform();
 
     if (isNative) {
-      const gpsState = await isLocationServicesEnabled();
-      if (gpsState === 'disabled') {
+      const permResult = await requestLocationPermissions();
+      if (permResult === 'denied') {
+        setStatus('denied');
+        return;
+      }
+      if (permResult === 'gps_off') {
         setStatus('gps_off');
         return;
       }
@@ -367,8 +371,12 @@ export function useLocationSharing(
 
   const retry = async () => {
     if (Capacitor.isNativePlatform()) {
-      const gpsState = await isLocationServicesEnabled();
-      if (gpsState === 'disabled') {
+      const permResult = await requestLocationPermissions();
+      if (permResult === 'denied') {
+        setStatus('denied');
+        return;
+      }
+      if (permResult === 'gps_off') {
         setStatus('gps_off');
         return;
       }
