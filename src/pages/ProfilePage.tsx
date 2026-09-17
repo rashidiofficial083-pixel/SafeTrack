@@ -79,6 +79,7 @@ export function ProfilePage() {
     const newValue = !bgTrackingEnabled;
     setBgTrackingEnabled(newValue);
     setBgTrackingPref(newValue);
+    window.dispatchEvent(new Event('safetrack-bg-tracking-changed'));
     if (newValue && Capacitor.isNativePlatform()) {
       setShowBatteryPrompt(true);
     }

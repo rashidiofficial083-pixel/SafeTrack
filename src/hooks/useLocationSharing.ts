@@ -7,9 +7,17 @@ import {
   type LocationWriter,
   type BackgroundWatcherHandle,
 } from '@/lib/backgroundGeolocation';
+import { isLocationServicesEnabled } from '@/lib/locationServices';
 import type { UserLocation } from '@/types';
 
-type LocationStatus = 'idle' | 'sharing' | 'denied' | 'blocked' | 'error' | 'unsupported';
+type LocationStatus =
+  | 'idle'
+  | 'sharing'
+  | 'denied'
+  | 'blocked'
+  | 'error'
+  | 'unsupported'
+  | 'gps_off';
 
 interface UseLocationSharingResult {
   status: LocationStatus;
@@ -204,7 +212,6 @@ export function useLocationSharing(
     const writer = createLocationWriter(uidRef.current);
     writerRef.current = writer;
 
-    // Sync battery level to writer
     writer.setBatteryLevel(batteryLevelRef.current);
 
     try {
@@ -223,17 +230,27 @@ export function useLocationSharing(
     }
   };
 
-  useEffect(() => {
+  const beginTracking = async () => {
     if (!uid) {
       setStatus('idle');
       return;
     }
+
+    const isNative = Capacitor.isNativePlatform();
+
+    if (isNative) {
+      const gpsState = await isLocationServicesEnabled();
+      if (gpsState === 'disabled') {
+        setStatus('gps_off');
+        return;
+      }
+    }
+
     lastWriteRef.current = 0;
     lastHistoryTimeRef.current = 0;
     lastHistoryLatRef.current = null;
     lastHistoryLngRef.current = null;
 
-    const isNative = Capacitor.isNativePlatform();
     const bgEnabled = getBgTrackingPref();
 
     if (isNative && bgEnabled) {
@@ -241,19 +258,45 @@ export function useLocationSharing(
     } else {
       startWatch();
     }
+  };
 
-    const handleBeforeUnload = () => {
-      if (lastHistoryLatRef.current !== null && lastHistoryLngRef.current !== null) {
-        writeLocation(
-          lastHistoryLatRef.current,
-          lastHistoryLngRef.current,
-          0,
-          null,
-          null,
-          true
-        );
+  const stopBackgroundWatch = () => {
+    if (bgWatcherRef.current) {
+      bgWatcherRef.current.stop().catch(() => {});
+      bgWatcherRef.current = null;
+    }
+    writerRef.current = null;
+  };
+
+  const handleBgTrackingChange = () => {
+    if (!uid) return;
+    const bgEnabled = getBgTrackingPref();
+    const isNative = Capacitor.isNativePlatform();
+
+    if (bgEnabled && isNative) {
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
       }
-    };
+      isLocationServicesEnabled().then((state) => {
+        if (state === 'disabled') {
+          setStatus('gps_off');
+        } else {
+          startBackgroundWatch();
+        }
+      });
+    } else {
+      stopBackgroundWatch();
+      if (watchIdRef.current === null) {
+        startWatch();
+      }
+    }
+  };
+
+  useEffect(() => {
+    beginTracking();
+
+    window.addEventListener('safetrack-bg-tracking-changed', handleBgTrackingChange);
 
     let visibilityTimeout: ReturnType<typeof setTimeout> | null = null;
 
@@ -271,9 +314,33 @@ export function useLocationSharing(
             );
           }
         }, 30000);
-      } else if (visibilityTimeout) {
-        clearTimeout(visibilityTimeout);
-        visibilityTimeout = null;
+      } else {
+        if (visibilityTimeout) {
+          clearTimeout(visibilityTimeout);
+          visibilityTimeout = null;
+        }
+        if (Capacitor.isNativePlatform() && uid) {
+          isLocationServicesEnabled().then((state) => {
+            if (state === 'disabled' && status === 'sharing') {
+              setStatus('gps_off');
+            } else if (state === 'enabled' && status === 'gps_off') {
+              beginTracking();
+            }
+          });
+        }
+      }
+    };
+
+    const handleBeforeUnload = () => {
+      if (lastHistoryLatRef.current !== null && lastHistoryLngRef.current !== null) {
+        writeLocation(
+          lastHistoryLatRef.current,
+          lastHistoryLngRef.current!,
+          0,
+          null,
+          null,
+          true
+        );
       }
     };
 
@@ -292,12 +359,21 @@ export function useLocationSharing(
       writerRef.current = null;
       window.removeEventListener('beforeunload', handleBeforeUnload);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('safetrack-bg-tracking-changed', handleBgTrackingChange);
       if (visibilityTimeout) clearTimeout(visibilityTimeout);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uid]);
 
   const retry = async () => {
+    if (Capacitor.isNativePlatform()) {
+      const gpsState = await isLocationServicesEnabled();
+      if (gpsState === 'disabled') {
+        setStatus('gps_off');
+        return;
+      }
+    }
+
     if ('permissions' in navigator) {
       try {
         const result = await navigator.permissions.query({

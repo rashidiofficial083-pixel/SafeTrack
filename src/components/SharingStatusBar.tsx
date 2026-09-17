@@ -1,7 +1,9 @@
-import { MapPinOff, RefreshCw } from 'lucide-react';
+import { MapPinOff, RefreshCw, Settings } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
+import { openLocationSettings } from '@/lib/locationServices';
 
 interface SharingStatusBarProps {
-  status: 'idle' | 'sharing' | 'denied' | 'blocked' | 'error' | 'unsupported';
+  status: 'idle' | 'sharing' | 'denied' | 'blocked' | 'error' | 'unsupported' | 'gps_off';
   accuracy: number | null;
   onRetry: () => void;
 }
@@ -28,6 +30,40 @@ export function SharingStatusBar({
             ±{Math.round(accuracy)}m
           </span>
         )}
+      </div>
+    );
+  }
+
+  if (status === 'gps_off') {
+    return (
+      <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl bg-amber-500/15 backdrop-blur-md border border-amber-500/30 shadow-lg">
+        <MapPinOff className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <span className="text-[12px] text-amber-300 font-medium block">
+            GPS is turned off
+          </span>
+          <span className="text-[11px] text-amber-300/80 block mt-0.5">
+            Turn on Location Services to share your position.
+          </span>
+          <div className="flex gap-2 mt-2">
+            {Capacitor.isNativePlatform() && (
+              <button
+                onClick={() => openLocationSettings()}
+                className="flex items-center gap-1 text-[12px] text-accent font-medium hover:text-accent-muted transition-colors"
+              >
+                <Settings className="w-3.5 h-3.5" />
+                Open settings
+              </button>
+            )}
+            <button
+              onClick={onRetry}
+              className="flex items-center gap-1 text-[12px] text-accent font-medium hover:text-accent-muted transition-colors"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Retry
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
